@@ -1,0 +1,6 @@
+{
+    "terminal.integrated.env.osx": {
+        "PATH": "/Users/st/.platformio/penv/bin:/Users/st/.platformio/penv:/Users/st/esp/xtensa-esp32-elf/bin:/usr/local/opt/openssl/bin:/Users/st/.nodebrew/current/bin:/usr/bin:/bin:/usr/sbin:/sbin:/usr/local/bin:/opt/X11/bin",
+        "PLATFORMIO_CALLER": "vscode"
+    }
+}
