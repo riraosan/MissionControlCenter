@@ -30,6 +30,7 @@ SOFTWARE.
 #include <stdio.h>
 #define ARDUINOJSON_DECODE_UNICODE 1
 #include <ArduinoJson.h>
+#include <Wifi.h>
 
 #define JST     3600* 9
 
@@ -55,9 +56,6 @@ SOFTWARE.
 const char* UTF8SJIS_file         = "/Utf8Sjis.tbl";  //UTF8 Shift_JIS 変換テーブルファイル名を記載しておく
 const char* Shino_Zen_Font_file   = "/shnmk16.bdf";   //全角フォントファイル名を定義
 const char* Shino_Half_Font_file  = "/shnm8x16.bdf";  //半角フォントファイル名を定義
-
-const char* ssid        = "Buffalo-G-FAA8";   //AP SSID
-const char* password    = "34ywce7cffyup";    //AP Pass Word
 
 const char* appid       = "dj00aiZpPU5xUWRpRTlhZXpBMCZzPWNvbnN1bWVyc2VjcmV0Jng9MzY-";//APP ID
 const char* zipcode     = "592-8344";//郵便番号
@@ -291,6 +289,8 @@ void printLEDMatrix(int16_t sj_length, uint8_t font_data[][16], uint8_t color_da
         //フォントデータをビットシフト元バッファにコピー
         src_line_data[j] = tmp_font_data[j][i];
       }
+
+    //    shift_bit_left(dist_line_data, src_line_data, sj_length, 1);
       send_line_data(i, src_line_data, tmp_color_data);
     }
   }
@@ -419,10 +419,12 @@ void getYahooApiJsonInfo(String httpRequest, String &resultJson){
 }
 
 void makeGetZipCodeStr(String zipcode, String &getStr){
-    getStr = "GET /search/zip/V1/zipCodeSearch?query=";
+    getStr = "GET https://map.yahooapis.jp/search/zip/V1/zipCodeSearch?query=";
     getStr += zipcode;
     getStr += "&output=";
     getStr += output;
+    getStr += "&appid=";
+    getStr += appid;
     getStr += " HTTP/1.1";
 } 
 
@@ -438,10 +440,10 @@ void makeZipCodeHttpRequestStr(String &httpRequest){
 
   httpRequest = getStr;
   httpRequest += "\n";
-  httpRequest += hostStr;
-  httpRequest += "\n";
-  httpRequest += agentStr;
-  httpRequest += "\n";
+  //httpRequest += hostStr;
+  //httpRequest += "\n";
+  //httpRequest += agentStr;
+  //httpRequest += "\n";
   httpRequest += "Connection: close";
 }
 
@@ -456,7 +458,7 @@ void getCoordinatesFromZipcode(String zipcode, String &coordinates){
 
   getYahooApiJsonInfo(httpRequest, resultJson);
 
-  Serial.println(resultJson);
+  //Serial.println(resultJson);
 
   const size_t capacity = JSON_ARRAY_SIZE(0) + JSON_ARRAY_SIZE(1) + JSON_ARRAY_SIZE(2) + JSON_ARRAY_SIZE(3) + 6*JSON_OBJECT_SIZE(2) + JSON_OBJECT_SIZE(7) + 2*JSON_OBJECT_SIZE(8) + 3*JSON_OBJECT_SIZE(9) + 990;
 
@@ -474,10 +476,12 @@ void getCoordinatesFromZipcode(String zipcode, String &coordinates){
 }
 
 void makeGetStr(String coordinates, String &getStr){
-  getStr = "GET /weather/V1/place?coordinates="; 
+  getStr = "GET https://map.yahooapis.jp/weather/V1/place?coordinates=";
   getStr += coordinates;
   getStr += "&output=";
   getStr += output;
+  getStr += "&appid=";
+  getStr += appid;
   getStr += " HTTP/1.1";
 }
 
@@ -495,10 +499,10 @@ void makeWeatherHttpRequestStr(String &httpRequest){
 
   httpRequest = getStr;
   httpRequest += "\n";
-  httpRequest += hostStr;
-  httpRequest += "\n";
-  httpRequest += agentStr;
-  httpRequest += "\n";
+  //httpRequest += hostStr;
+  //httpRequest += "\n";
+  //httpRequest += agentStr;
+  //httpRequest += "\n";
   httpRequest += "Connection: close";
 }
 
@@ -507,6 +511,8 @@ void getWeatherStrings(JsonArray &i_weather, int i_index, String &o_type, String
   const char* Type = Feature_0_Property_WeatherList_Weather_0["Type"];
   const char* Date = Feature_0_Property_WeatherList_Weather_0["Date"];
   float Rainfall = Feature_0_Property_WeatherList_Weather_0["Rainfall"];
+
+  Serial.printf("Type = %s, Date = %s, Rainfall= %f\n", Type, Date, Rainfall);
 
   o_type = Type;
   o_date = Date;
@@ -537,7 +543,7 @@ uint16_t getWeatherInfo(int &forcast_time){
 
   getYahooApiJsonInfo(httpRequest, weatherJsonInfo);
 
-  Serial.println(weatherJsonInfo);
+  //Serial.println(weatherJsonInfo);
 
   const size_t capacity = JSON_ARRAY_SIZE(1) + JSON_ARRAY_SIZE(7) + JSON_OBJECT_SIZE(1) + 3*JSON_OBJECT_SIZE(2) + 7*JSON_OBJECT_SIZE(3) + JSON_OBJECT_SIZE(4) + JSON_OBJECT_SIZE(7) + 660;
   DynamicJsonDocument doc(capacity);
@@ -546,7 +552,7 @@ uint16_t getWeatherInfo(int &forcast_time){
   JsonObject Feature_0 = doc["Feature"][0];
 
   JsonArray WeatherList = Feature_0["Property"]["WeatherList"]["Weather"];
-
+  
   getWeatherStrings(WeatherList, 0, type, date, rainfall);
 
   //現在雨が降っていない
@@ -726,19 +732,6 @@ void setup() {
   setAllPortOutput();
   setAllPortLow();
 
-  WiFi.begin(ssid, password);
-  while(WiFi.status() != WL_CONNECTED) {
-    Serial.print('.');
-    delay(500);
-  }
-  Serial.println();
-  Serial.printf("Connected, IP address: ");
-  Serial.println(WiFi.localIP());
-  Serial.print("Connected to ");
-  Serial.println(ssid);
-
-  configTime( JST, 0, "ntp.nict.jp", "ntp.jst.mfeed.ad.jp");
-
   //手動で表示バッファを切り替える
   digitalWrite(PORT_SE_IN, HIGH);
 
@@ -750,6 +743,60 @@ void setup() {
   SFR.SPIFFS_Shinonome_Init3F(UTF8SJIS_file, Shino_Half_Font_file, Shino_Zen_Font_file);
   sj_length = SFR.StrDirect_ShinoFNT_readALL("  OK", font_buf);
   scrollLEDMatrix(sj_length, font_buf, font_color1, 30);
+
+  // 前回接続時情報で接続する
+  Serial.println("WiFi begin");
+  WiFi.begin();
+  while (WiFi.status() != WL_CONNECTED) {
+    Serial.print(".");
+    delay(500);
+
+    // 10秒以上接続できなかったら抜ける
+    if ( 10000 < millis() ) {
+      break;
+    }
+  }
+  Serial.println("");
+
+  // 未接続の場合にはSmartConfig待受
+  if ( WiFi.status() != WL_CONNECTED ) {
+    WiFi.mode(WIFI_STA);
+    WiFi.beginSmartConfig();
+
+    Serial.println("Waiting for SmartConfig");
+    while (!WiFi.smartConfigDone()) {
+      delay(500);
+      Serial.print("#");
+      // 30秒以上接続できなかったら抜ける
+      if ( 30000 < millis() ) {
+        Serial.println("");
+        Serial.println("Reset");
+        ESP.restart();
+      }
+    }
+
+    // Wi-fi接続
+    Serial.println("");
+    Serial.println("Waiting for WiFi");
+    while (WiFi.status() != WL_CONNECTED) {
+      delay(500);
+      Serial.print(".");
+      // 60秒以上接続できなかったら抜ける
+      if ( 60000 < millis() ) {
+        Serial.println("");
+        Serial.println("Reset");
+        ESP.restart();
+      }
+    }
+    Serial.println("");
+    Serial.println("WiFi Connected.");
+  }
+
+  Serial.println();
+  Serial.printf("Connected, IP address: ");
+  Serial.println(WiFi.localIP());
+
+  configTime( JST, 0, "ntp.nict.jp", "ntp.jst.mfeed.ad.jp");
 
   xMutex = xSemaphoreCreateMutex();
 
