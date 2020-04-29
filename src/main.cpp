@@ -577,7 +577,8 @@ uint16_t getWeatherInfo(int &forcast_time){
         forcast_time = i * 10 - 10;
         weatherInfo = RAINFALL_END;
         break;
-      }else{
+      }
+      else{
         //しばらく雨が降ります。６０分後も降雨状態
         weatherInfo = RAINFALL_NOW;
       }
@@ -595,9 +596,9 @@ void ClockTask(void *pvParameters) {
   Serial.printf("ClockTask coreID = %d, ClockTask priority = %d\n", xPortGetCoreID(), uxTaskPriorityGet(hClock));
 
   BaseType_t xStatus;
-  const TickType_t xTicksToWait = 500UL;
+  const TickType_t xTicksToWait = 1000UL;
   xSemaphoreGive(xMutex);
- 
+
   while(1){
       xStatus = xSemaphoreTake(xMutex, xTicksToWait);
 
@@ -609,16 +610,18 @@ void ClockTask(void *pvParameters) {
 
         t = time(NULL);
         tm = localtime(&t);
-
-        if(tm->tm_min % informPeriod == 0 && tm->tm_sec < 10){
-          Serial.printf("tm_sec = %d\n", tm->tm_sec);
-          Serial.println("Give Semaphore(ClockTask)");
-          xSemaphoreGive(xMutex);
-        }else{
+         
+        if(tm->tm_min % informPeriod == 0 && tm->tm_sec < 3){
+            Serial.printf("tm_sec = %d\n", tm->tm_sec);
+            Serial.println("Give Semaphore(ClockTask)");
+            xSemaphoreGive(xMutex);
+        }
+        else{
           printTimeLEDMatrix();
         }
       }
 
+      //xSemaphoreGive(xMutex);
       delay(500);
   }
 }
@@ -637,7 +640,7 @@ void WeatherInfoTask(void *pvParameters){
   Serial.printf("WeatherInfoTask coreID = %d, WeatherInfoTask priority = %d\n", xPortGetCoreID(), uxTaskPriorityGet(hWeatherInfo));
 
   BaseType_t xStatus;
-  const TickType_t xTicksToWait = 1000UL;
+  const TickType_t xTicksToWait = 500UL;
   xSemaphoreGive(xMutex);
 
   uint16_t sj_length = 0;//半角文字数 
@@ -677,48 +680,49 @@ void WeatherInfoTask(void *pvParameters){
       uint16_t weather_state = getWeatherInfo(forcast_time);
 
       //ここでビープ音を出音する
+      if(weather_state != RAINFALL_NO){
+        sj_length = SFR.StrDirect_ShinoFNT_readALL(" Yahoo! ", yahoo_font_buf);
+        printLEDMatrix(sj_length, yahoo_font_buf, yahoo_font_color);
 
-      sj_length = SFR.StrDirect_ShinoFNT_readALL(" Yahoo! ", yahoo_font_buf);
-      printLEDMatrix(sj_length, yahoo_font_buf, yahoo_font_color);
+        delay(1000);
 
-      delay(1000);
+        sj_length = SFR.StrDirect_ShinoFNT_readALL("気象情報", yahoo_font_buf);
+        printLEDMatrix(sj_length, yahoo_font_buf, yahoo_font_color);
 
-      sj_length = SFR.StrDirect_ShinoFNT_readALL("気象情報", yahoo_font_buf);
-      printLEDMatrix(sj_length, yahoo_font_buf, yahoo_font_color);
+        delay(1000);
 
-      delay(2000);
-
-      switch(weather_state){
-        case RAINFALL_END:
-          if(forcast_time != 0){
-            sprintf(tmp_str, "        %d分後に雨が止む予報です。", forcast_time);          
-          }else{
-            sprintf(tmp_str, "        すぐに雨が止む予報です。");          
-          }
-        break;
-        case RAINFALL_NO://雨は降っていない。60分後の予報もない
-          sprintf(tmp_str, "        雨が降る予報はありません。");          
-        break;
-        case RAINFALL_START:
-          if(forcast_time != 0){
-            sprintf(tmp_str, "        %d分後に雨が降る予報です。", forcast_time);          
-          }else{
-            sprintf(tmp_str, "        すぐに雨が降る予報です。");          
-          }
-        break;
-        case RAINFALL_NOW:
-          sprintf(tmp_str, "        雨が降っています。しばらく雨が続きます。");    
-        break;
-        default:
-          ;//nothing
+        switch(weather_state){
+          case RAINFALL_END:
+            if(forcast_time != 0){
+              sprintf(tmp_str, "        %d分後に雨が止む予報です。", forcast_time);          
+            }else{
+              sprintf(tmp_str, "        すぐに雨が止む予報です。");          
+            }
+          break;
+          case RAINFALL_NO://雨は降っていない。60分後の予報もない
+            sprintf(tmp_str, "        雨が降る予報はありません。");          
+          break;
+          case RAINFALL_START:
+            if(forcast_time != 0){
+              sprintf(tmp_str, "        %d分後に雨が降る予報です。", forcast_time);          
+            }else{
+              sprintf(tmp_str, "        すぐに雨が降る予報です。");          
+            }
+          break;
+          case RAINFALL_NOW:
+            sprintf(tmp_str, "        雨が降っています。しばらく雨が続きます。");    
+          break;
+          default:
+            ;//nothing
+        }
+        Serial.printf("%s\n", tmp_str);
+        sj_length = SFR.StrDirect_ShinoFNT_readALL(tmp_str, font_buf);
+        scrollLEDMatrix(sj_length, font_buf, font_color1, 30);
       }
-      Serial.printf("%s\n", tmp_str);
-      sj_length = SFR.StrDirect_ShinoFNT_readALL(tmp_str, font_buf);
-      scrollLEDMatrix(sj_length, font_buf, font_color1, 30); 
     }
 
     xSemaphoreGive(xMutex);
-    delay(10);
+    delay(1000);
 
   }
 }
@@ -741,9 +745,7 @@ void setup() {
   uint8_t font_color1[32] = {G,G,G,G,G,G,G,G,G,G,G,G,G,G,G,G,G,G,G,G,G,G,G,G,G,G,G,G,G,G,G,G};
 
   SFR.SPIFFS_Shinonome_Init3F(UTF8SJIS_file, Shino_Half_Font_file, Shino_Zen_Font_file);
-  sj_length = SFR.StrDirect_ShinoFNT_readALL("  OK", font_buf);
-  scrollLEDMatrix(sj_length, font_buf, font_color1, 30);
-
+ 
   // 前回接続時情報で接続する
   Serial.println("WiFi begin");
   WiFi.begin();
@@ -796,13 +798,20 @@ void setup() {
   Serial.printf("Connected, IP address: ");
   Serial.println(WiFi.localIP());
 
+  sj_length = SFR.StrDirect_ShinoFNT_readALL("        WiFi Connected.", font_buf);
+  scrollLEDMatrix(sj_length, font_buf, font_color1, 30);
+
+  sj_length = SFR.StrDirect_ShinoFNT_readALL("        "+ WiFi.localIP().toString(), font_buf);
+  scrollLEDMatrix(sj_length, font_buf, font_color1, 30);
+
+  //時刻取得
   configTime( JST, 0, "ntp.nict.jp", "ntp.jst.mfeed.ad.jp");
 
   xMutex = xSemaphoreCreateMutex();
 
   if( xMutex != NULL ){
     xTaskCreatePinnedToCore(ClockTask, "ClockTask", 4096, NULL, 1, &hClock, 1); //ClockTask開始
-    xTaskCreatePinnedToCore(WeatherInfoTask, "WeatherInfoTask", 8192, NULL, 2, &hWeatherInfo, 0); //WeatherInfoTask開始
+    xTaskCreatePinnedToCore(WeatherInfoTask, "WeatherInfoTask", 8192, NULL, 6, &hWeatherInfo, 1); //WeatherInfoTask開始
   }else{
     while(1){
         Serial.println("rtos mutex create error, stopped");
