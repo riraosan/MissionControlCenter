@@ -36,6 +36,9 @@ SOFTWARE.
 #include "ESPAsyncWebServer.h"
 #include "SPIFFS.h"
 
+#include <ESPmDNS.h>
+#include <WiFiClient.h>
+
 #define JST     3600* 9
 
 //ポート設定
@@ -61,14 +64,14 @@ const char* UTF8SJIS_file         = "/Utf8Sjis.tbl";  //UTF8 Shift_JIS 変換テ
 const char* Shino_Zen_Font_file   = "/shnmk16.bdf";   //全角フォントファイル名を定義
 const char* Shino_Half_Font_file  = "/shnm8x16.bdf";  //半角フォントファイル名を定義
 
-//const char *ssid = "ESP32ap";
-//const char *password = "12345678";
+const char *ssid = "ESP32-G-FAA8";
+const char *password = "room03601";
 
 ESP32_SPIFFS_ShinonomeFNT SFR;  //東雲フォントをSPIFFSから取得するライブラリ
 
 // Replace with your network credentials
-const char* ssid = "Buffalo-G-FAA8";
-const char* password = "34ywce7cffyup";
+//const char* ssid = "Buffalo-G-FAA8";
+//const char* password = "34ywce7cffyup";
 
 // Set LED GPIO
 const int ledPin = 2;
@@ -444,14 +447,35 @@ void setup() {
   }
 
   // Connect to Wi-Fi
-  WiFi.begin(ssid, password);
-  while (WiFi.status() != WL_CONNECTED) {
-    delay(1000);
-    Serial.println("Connecting to WiFi..");
+  // WiFi.begin(ssid, password);
+  // while (WiFi.status() != WL_CONNECTED) {
+  //   delay(1000);
+  //   Serial.println("Connecting to WiFi..");
+  // }
+
+  Serial.println();
+  Serial.print("Configuring access point...");
+
+  //アクセスポイントを起動する
+  WiFi.softAP(ssid, password);
+
+  IPAddress myIP = WiFi.softAPIP();
+  Serial.print("AP IP address: ");
+  Serial.println(myIP);
+  //
+  //サーバーセットアップ
+  //
+  /* Set up mDNS */
+  if (!MDNS.begin("esp32")) {
+      Serial.println("Error setting up MDNS responder!");
+      while(1) {
+          delay(1000);
+      }
   }
+  Serial.println("mDNS responder started");
 
   // Print ESP32 Local IP Address
-  Serial.println(WiFi.localIP());
+  Serial.println(myIP.toString());
 
   // Route for root / web page
   server.on("/", HTTP_GET, [](AsyncWebServerRequest *request){
@@ -478,42 +502,14 @@ void setup() {
   // Start server
   server.begin();
 
-
-  // Serial.println();
-  // Serial.print("Configuring access point...");
-  // /* You can remove the password parameter if you want the AP to be open. */
-  // //アクセスポイントを起動する
-  // WiFi.softAP(ssid, password);
-
-  // IPAddress myIP = WiFi.softAPIP();
-  // Serial.print("AP IP address: ");
-  // Serial.println(myIP);
-  // //
-  // //サーバーセットアップ
-  // //
-  // /* Set up mDNS */
-  // if (!MDNS.begin("esp32")) {
-  //     Serial.println("Error setting up MDNS responder!");
-  //     while(1) {
-  //         delay(1000);
-  //     }
-  // }
-  // Serial.println("mDNS responder started");
-  // /* Start Web Server server */
-  // server.begin();
-  // //Serial.println("Web server started");
-
-  // /* Add HTTP service to MDNS-SD */
-  // MDNS.addService("http", "tcp", 80);
-
   sj_length = SFR.StrDirect_ShinoFNT_readALL("        Web server started.", font_buf);
   scrollLEDMatrix(sj_length, font_buf, font_color1, 30);
 
-  sj_length = SFR.StrDirect_ShinoFNT_readALL("        "+ WiFi.localIP().toString(), font_buf);
+  sj_length = SFR.StrDirect_ShinoFNT_readALL("        [AP mode]" + myIP.toString(), font_buf);
   scrollLEDMatrix(sj_length, font_buf, font_color1, 30);
 
   //時刻取得
-  configTime( JST, 0, "ntp.nict.jp", "ntp.jst.mfeed.ad.jp");
+  //configTime( JST, 0, "ntp.nict.jp", "ntp.jst.mfeed.ad.jp");
 
   xMutex = xSemaphoreCreateMutex();
 
