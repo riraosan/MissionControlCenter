@@ -81,7 +81,6 @@ String ledState;
 // Create AsyncWebServer object on port 80
 AsyncWebServer server(80);
 
-
 SemaphoreHandle_t xMutex = NULL;
 
 //LEDマトリクスの書き込みアドレスを設定するメソッド
@@ -364,11 +363,44 @@ void printTimeLEDMatrix(){
   printLEDMatrix(sj_length, time_font_buf, time_font_color);
 }
 
-portTickType Delay1000 = 1000 / portTICK_RATE_MS; //freeRTOS 用の遅延時間定義
-TaskHandle_t hClock;
+void printStatic(String staticStr){
+  //フォントデータバッファ
+  uint8_t font_buf[8][16] = {0};
+  //フォント色データ（半角文字毎に設定する）
+  uint8_t font_color[8] = {G,G,G,G,G,G,G,G};
+  
 
-void ClockTask(void *pvParameters) {
-  Serial.printf("ClockTask coreID = %d, ClockTask priority = %d\n", xPortGetCoreID(), uxTaskPriorityGet(hClock));
+  if(staticStr.length() - 2 < 9){
+    uint16_t sj_length = SFR.StrDirect_ShinoFNT_readALL(staticStr, font_buf);
+    printLEDMatrix(sj_length, font_buf, font_color);
+  }
+  else{
+    Serial.printf("printStatic():Too many characters! length = %d\n", staticStr.length());
+  }
+}
+
+void printScroll(String scrollStr){
+  //フォントデータバッファ
+  uint8_t font_buf[32][16] = {0};
+  //フォント色データ　str1（半角文字毎に設定する）
+  uint8_t font_color[32] = {G,G,G,G,G,G,G,G,G,G,
+                            G,G,G,G,G,G,G,G,G,G,
+                            G,G,G,G,G,G,G,G,G,G,
+                            G,G};
+
+  if(scrollStr.length() - 2 < 33){
+    uint16_t sj_length = SFR.StrDirect_ShinoFNT_readALL(scrollStr, font_buf);
+    scrollLEDMatrix(sj_length, font_buf, font_color, 25);
+  }
+  else{
+    Serial.printf("printScroll():Too many characters! length = %d\n", scrollStr.length());
+  }
+}
+
+TaskHandle_t hCovid;
+
+void CovidTask(void *pvParameters) {
+  Serial.printf("CovidTask coreID = %d, CovidTask priority = %d\n", xPortGetCoreID(), uxTaskPriorityGet(hCovid));
 
   BaseType_t xStatus;
   const TickType_t xTicksToWait = 1000UL;
@@ -376,30 +408,35 @@ void ClockTask(void *pvParameters) {
 
   while(1){
       xStatus = xSemaphoreTake(xMutex, xTicksToWait);
+      Serial.println("check for mutex (CovidTask)");
 
-      Serial.println("check for mutex (ClockTask)");
-
-      if(xStatus == pdTRUE){         
-          printTimeLEDMatrix();
+      if(xStatus == pdTRUE){
+        printStatic("Im COVID");
+        delay(1000);
+        printStatic("｀∇´ψ");
+        delay(1000);
+        printStatic("We Kill");
+        delay(1000);
+        printStatic("humanity");
+        delay(1000);
+        printStatic("O(｀∇´");
+        delay(1000);
+        printStatic("Useless ");
+        delay(1000);
+        printStatic("｀∇´ψ");
+        delay(1000);
+        printStatic("washing ");
+        delay(1000);
+        printStatic("O(｀∇´");
+        delay(1000);
+        printStatic("hands!! ");
+        delay(1000);
+        printStatic("(｀∇´)");
+        delay(2000);
       }
 
-      //xSemaphoreGive(xMutex);
-      delay(500);
-  }
-}
-
-void printStatic(String staticStr){
-  //フォントデータバッファ
-  uint8_t font_buf[8][16] = {0};
-  //フォント色データ（半角文字毎に設定する）
-  uint8_t font_color[8] = {G,G,G,G,G,G,G,G};
-
-  if(staticStr.length() < 9){
-    uint16_t sj_length = SFR.StrDirect_ShinoFNT_readALL(staticStr, font_buf);
-    printLEDMatrix(sj_length, font_buf, font_color);
-  }
-  else{
-    Serial.println("printStatic():Too many characters!");
+      xSemaphoreGive(xMutex);
+      delay(1);
   }
 }
 
@@ -419,23 +456,16 @@ String processor(const String& var){
   return String();
 }
 
+int nAttackCnt = 0;
 
 void setup() {
 
-  uint16_t sj_length = 0;//半角文字数 
-
   delay(1000);
-  //Serial.begin(115200);
   setAllPortOutput();
   setAllPortLow();
 
   //手動で表示バッファを切り替える
   digitalWrite(PORT_SE_IN, HIGH);
-
-  //フォントデータバッファ
-  uint8_t font_buf[32][16] = {0};
-  //フォント色データ　str1（半角文字毎に設定する）
-  uint8_t font_color1[32] = {G,G,G,G,G,G,G,G,G,G,G,G,G,G,G,G,G,G,G,G,G,G,G,G,G,G,G,G,G,G,G,G};
 
   SFR.SPIFFS_Shinonome_Init3F(UTF8SJIS_file, Shino_Half_Font_file, Shino_Zen_Font_file);
  
@@ -457,7 +487,7 @@ void setup() {
   // }
 
   Serial.println();
-  Serial.print("Configuring access point...");
+  Serial.println("Configuring access point...");
 
   //アクセスポイントを起動する
   WiFi.softAP(ssid, password);
@@ -465,9 +495,7 @@ void setup() {
   IPAddress myIP = WiFi.softAPIP();
   Serial.print("AP IP address: ");
   Serial.println(myIP);
-  //
-  //サーバーセットアップ
-  //
+ 
   /* Set up mDNS */
   if (!MDNS.begin("esp32")) {
       Serial.println("Error setting up MDNS responder!");
@@ -481,7 +509,7 @@ void setup() {
   Serial.println(myIP.toString());
 
   // Route for root / web page
-  server.on("/", HTTP_GET, [](AsyncWebServerRequest *request){
+  server.on("/", HTTP_GET, [](AsyncWebServerRequest *request){  
     request->send(SPIFFS, "/index.html", String(), false, processor);
   });
   
@@ -491,27 +519,56 @@ void setup() {
   });
 
   // Route to set GPIO to HIGH
-  server.on("/start", HTTP_GET, [](AsyncWebServerRequest *request){
-    digitalWrite(ledPin, HIGH); 
-    printStatic("Start.  ");   
+  server.on("/on", HTTP_GET, [](AsyncWebServerRequest *request){
+    vTaskSuspend(hCovid);
+    printStatic("Cnt Dwn");   
+    digitalWrite(ledPin, HIGH);
+    delay(500); 
+    digitalWrite(ledPin, LOW);    
     request->send(SPIFFS, "/index.html", String(), false, processor);
   });
   
   // Route to set GPIO to LOW
   server.on("/stop", HTTP_GET, [](AsyncWebServerRequest *request){
+    vTaskSuspend(hCovid);
+    printStatic("Stopped.");   
     digitalWrite(ledPin, LOW);    
-    printStatic("Stop.   ");   
     request->send(SPIFFS, "/index.html", String(), false, processor);
+  });
+
+  // Attack the COVID virus アマビエ
+  server.on("/attack", HTTP_GET, [](AsyncWebServerRequest *request){
+    vTaskSuspend(hCovid);
+    printStatic("Attack!!");   
+    delay(1000); 
+    printStatic(" *(> <)*");   
+    delay(1000); 
+    printStatic(" Ouch!! ");
+    delay(1000); 
+    nAttackCnt += 1;
+    request->send(SPIFFS, "/index.html", String(), false, processor);
+    vTaskResume(hCovid);
+  });
+  
+  // Kill COVID　アビガン　レムデシビル
+  server.on("/kill", HTTP_GET, [](AsyncWebServerRequest *request){
+    vTaskSuspend(hCovid);
+    printStatic("  (* *) ");   
+    delay(3000); 
+    nAttackCnt += 1;
+    request->send(SPIFFS, "/index.html", String(), false, processor);
+    vTaskResume(hCovid);
   });
 
   // Start server
   server.begin();
 
-  sj_length = SFR.StrDirect_ShinoFNT_readALL("        Web server started.", font_buf);
-  scrollLEDMatrix(sj_length, font_buf, font_color1, 30);
+  printStatic("[AP]mode");
 
-  sj_length = SFR.StrDirect_ShinoFNT_readALL("        [AP mode]" + myIP.toString(), font_buf);
-  scrollLEDMatrix(sj_length, font_buf, font_color1, 30);
+  delay(2000);
+
+  printScroll("        Web server started.");
+  printScroll("        " + myIP.toString());
 
   //時刻取得
   //configTime( JST, 0, "ntp.nict.jp", "ntp.jst.mfeed.ad.jp");
@@ -519,7 +576,7 @@ void setup() {
   xMutex = xSemaphoreCreateMutex();
 
   if( xMutex != NULL ){
-    //xTaskCreatePinnedToCore(ClockTask, "ClockTask", 4096, NULL, 1, &hClock, 1); //ClockTask開始
+    xTaskCreatePinnedToCore(CovidTask, "CovidTask", 4096, NULL, 2, &hCovid, 0); //ClockTask開始
   }
   else{
     while(1){
@@ -530,5 +587,15 @@ void setup() {
 }
 
 void loop() {
-  ;
+
+  if(nAttackCnt == 2){
+    vTaskDelete(hCovid);
+    nAttackCnt = 3;
+  }
+
+  if(nAttackCnt == 3){
+    printStatic("We won!!");
+  }
+
+  delay(10);
 }
