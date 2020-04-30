@@ -271,7 +271,6 @@ void printLEDMatrix(int16_t sj_length, uint8_t font_data[][16], uint8_t color_da
     for(int j = 0; j < 16; j++){
       tmp_font_data[i][j] = font_data[i][j];
     }
-
   }
 
   for(int k = 0; k < sj_length * 8 + 2; k++){
@@ -389,16 +388,20 @@ void ClockTask(void *pvParameters) {
   }
 }
 
-void printConnecting(void){
+void printStatic(String staticStr){
   //フォントデータバッファ
   uint8_t font_buf[8][16] = {0};
   //フォント色データ（半角文字毎に設定する）
-  uint8_t font_color1[8] = {G,G,G,G,G,G,G,G};
+  uint8_t font_color[8] = {G,G,G,G,G,G,G,G};
 
-  uint16_t sj_length = SFR.StrDirect_ShinoFNT_readALL("...     ", font_buf);
-  printLEDMatrix(sj_length, font_buf, font_color1);
+  if(staticStr.length() < 9){
+    uint16_t sj_length = SFR.StrDirect_ShinoFNT_readALL(staticStr, font_buf);
+    printLEDMatrix(sj_length, font_buf, font_color);
+  }
+  else{
+    Serial.println("printStatic():Too many characters!");
+  }
 }
-
 
 // Replaces placeholder with LED state value
 String processor(const String& var){
@@ -488,14 +491,16 @@ void setup() {
   });
 
   // Route to set GPIO to HIGH
-  server.on("/on", HTTP_GET, [](AsyncWebServerRequest *request){
-    digitalWrite(ledPin, HIGH);    
+  server.on("/start", HTTP_GET, [](AsyncWebServerRequest *request){
+    digitalWrite(ledPin, HIGH); 
+    printStatic("Start.  ");   
     request->send(SPIFFS, "/index.html", String(), false, processor);
   });
   
   // Route to set GPIO to LOW
-  server.on("/off", HTTP_GET, [](AsyncWebServerRequest *request){
+  server.on("/stop", HTTP_GET, [](AsyncWebServerRequest *request){
     digitalWrite(ledPin, LOW);    
+    printStatic("Stop.   ");   
     request->send(SPIFFS, "/index.html", String(), false, processor);
   });
 
