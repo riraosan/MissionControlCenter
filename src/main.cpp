@@ -22,11 +22,6 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 */
 
-/*********
-  Rui Santos
-  Complete project details at https://randomnerdtutorials.com  
-*********/
-
 #include <Arduino.h>
 #include <ESP32_SPIFFS_ShinonomeFNT.h>
 #include <ESP32_SPIFFS_UTF8toSJIS.h>
@@ -38,6 +33,9 @@ SOFTWARE.
 
 #include <ESPmDNS.h>
 #include <WiFiClient.h>
+
+//ロケットローンチモードにするにはfalseにすること。
+#define COVID_MODE    true
 
 #define JST     3600* 9
 
@@ -58,20 +56,30 @@ SOFTWARE.
 #define R             1   //赤色
 #define O             2   //橙色
 #define G             3   //緑色
+#define FONT_BUF_SIZE 80  //半角文字数
+
+#define MSG_NOTHING         0x0000
+#define MSG_RESETCOUNT      0x0001
+#define MSG_PRINTMSG        0x0002
+#define MSG_ATTACKEND       0x0003
+#define MSG_ATTACKCOUNTUP   0x0004
 
 //これらのファイルをSPIFFS領域へコピーしておくこと
 const char* UTF8SJIS_file         = "/Utf8Sjis.tbl";  //UTF8 Shift_JIS 変換テーブルファイル名を記載しておく
 const char* Shino_Zen_Font_file   = "/shnmk16.bdf";   //全角フォントファイル名を定義
 const char* Shino_Half_Font_file  = "/shnm8x16.bdf";  //半角フォントファイル名を定義
 
-const char *ssid = "ESP32-G-FAA8";
-const char *password = "room03601";
-
 ESP32_SPIFFS_ShinonomeFNT SFR;  //東雲フォントをSPIFFSから取得するライブラリ
 
-// Replace with your network credentials
-//const char* ssid = "Buffalo-G-FAA8";
-//const char* password = "34ywce7cffyup";
+#if COVID_MODE
+const char* ssid = "Buffalo-G-FAA8";
+const char* password = "34ywce7cffyup";
+#else
+const char *ssid = "ESP32-G-FAA8";
+const char *password = "room03601";
+#endif
+
+int gEventMsgID = MSG_NOTHING;
 
 // Set LED GPIO
 const int ledPin = 2;
@@ -369,8 +377,7 @@ void printStatic(String staticStr){
   //フォント色データ（半角文字毎に設定する）
   uint8_t font_color[8] = {G,G,G,G,G,G,G,G};
   
-
-  if(staticStr.length() - 2 < 9){
+  if(staticStr.length() - 2 < 8 + 1){
     uint16_t sj_length = SFR.StrDirect_ShinoFNT_readALL(staticStr, font_buf);
     printLEDMatrix(sj_length, font_buf, font_color);
   }
@@ -381,23 +388,27 @@ void printStatic(String staticStr){
 
 void printScroll(String scrollStr){
   //フォントデータバッファ
-  uint8_t font_buf[32][16] = {0};
+  uint8_t font_buf[FONT_BUF_SIZE][16] = {0};
   //フォント色データ　str1（半角文字毎に設定する）
-  uint8_t font_color[32] = {G,G,G,G,G,G,G,G,G,G,
-                            G,G,G,G,G,G,G,G,G,G,
-                            G,G,G,G,G,G,G,G,G,G,
-                            G,G};
+  uint8_t font_color[FONT_BUF_SIZE] = { G,G,G,G,G,G,G,G,G,G,
+                                        G,G,G,G,G,G,G,G,G,G,
+                                        G,G,G,G,G,G,G,G,G,G,
+                                        G,G,G,G,G,G,G,G,G,G,
+                                        G,G,G,G,G,G,G,G,G,G,
+                                        G,G,G,G,G,G,G,G,G,G,
+                                        G,G,G,G,G,G,G,G,G,G,
+                                        G,G,G,G,G,G,G,G,G,G};
 
-  if(scrollStr.length() - 2 < 33){
+  if(scrollStr.length() - 2 < FONT_BUF_SIZE + 1){
     uint16_t sj_length = SFR.StrDirect_ShinoFNT_readALL(scrollStr, font_buf);
-    scrollLEDMatrix(sj_length, font_buf, font_color, 25);
+    scrollLEDMatrix(sj_length, font_buf, font_color, 30);
   }
   else{
     Serial.printf("printScroll():Too many characters! length = %d\n", scrollStr.length());
   }
 }
 
-TaskHandle_t hCovid;
+TaskHandle_t hCovid = NULL;
 
 void CovidTask(void *pvParameters) {
   Serial.printf("CovidTask coreID = %d, CovidTask priority = %d\n", xPortGetCoreID(), uxTaskPriorityGet(hCovid));
@@ -421,15 +432,11 @@ void CovidTask(void *pvParameters) {
         delay(1000);
         printStatic("O(｀∇´");
         delay(1000);
-        printStatic("Useless ");
-        delay(1000);
+        printScroll("        Don't wash");
         printStatic("｀∇´ψ");
         delay(1000);
-        printStatic("washing ");
-        delay(1000);
+        printScroll("        your hands!!");
         printStatic("O(｀∇´");
-        delay(1000);
-        printStatic("hands!! ");
         delay(1000);
         printStatic("(｀∇´)");
         delay(2000);
@@ -479,13 +486,14 @@ void setup() {
     return;
   }
 
+#if COVID_MODE
   // Connect to Wi-Fi
-  // WiFi.begin(ssid, password);
-  // while (WiFi.status() != WL_CONNECTED) {
-  //   delay(1000);
-  //   Serial.println("Connecting to WiFi..");
-  // }
-
+  WiFi.begin(ssid, password);
+  while (WiFi.status() != WL_CONNECTED) {
+     delay(1000);
+     Serial.println("Connecting to WiFi..");
+  }
+#else
   Serial.println();
   Serial.println("Configuring access point...");
 
@@ -507,9 +515,11 @@ void setup() {
 
   // Print ESP32 Local IP Address
   Serial.println(myIP.toString());
+#endif
 
   // Route for root / web page
   server.on("/", HTTP_GET, [](AsyncWebServerRequest *request){  
+    printStatic(" Ready. ");
     request->send(SPIFFS, "/index.html", String(), false, processor);
   });
   
@@ -521,10 +531,8 @@ void setup() {
   // Route to set GPIO to HIGH
   server.on("/on", HTTP_GET, [](AsyncWebServerRequest *request){
     vTaskSuspend(hCovid);
-    printStatic("Cnt Dwn");   
-    digitalWrite(ledPin, HIGH);
-    delay(500); 
-    digitalWrite(ledPin, LOW);    
+    printStatic("Starting");   
+    //ここにタイマーを開始する処理を入れる
     request->send(SPIFFS, "/index.html", String(), false, processor);
   });
   
@@ -536,42 +544,54 @@ void setup() {
     request->send(SPIFFS, "/index.html", String(), false, processor);
   });
 
-  // Attack the COVID virus アマビエ
+  // Attack the COVID virus
   server.on("/attack", HTTP_GET, [](AsyncWebServerRequest *request){
     vTaskSuspend(hCovid);
     printStatic("Attack!!");   
     delay(1000); 
+    digitalWrite(ledPin, HIGH);
+    delay(500); 
+    digitalWrite(ledPin, LOW);    
     printStatic(" *(> <)*");   
-    delay(1000); 
+    delay(500); 
+    printStatic("*(> <)* ");   
+    delay(500); 
     printStatic(" Ouch!! ");
     delay(1000); 
-    nAttackCnt += 1;
-    request->send(SPIFFS, "/index.html", String(), false, processor);
     vTaskResume(hCovid);
+    gEventMsgID = MSG_ATTACKCOUNTUP;
+    request->send(SPIFFS, "/index.html", String(), false, processor);
   });
   
-  // Kill COVID　アビガン　レムデシビル
+  // Kill the COVID virus
   server.on("/kill", HTTP_GET, [](AsyncWebServerRequest *request){
     vTaskSuspend(hCovid);
-    printStatic("  (* *) ");   
+    printStatic("(((* *))");   
     delay(3000); 
-    nAttackCnt += 1;
-    request->send(SPIFFS, "/index.html", String(), false, processor);
     vTaskResume(hCovid);
+    gEventMsgID = MSG_ATTACKCOUNTUP;
+    request->send(SPIFFS, "/index.html", String(), false, processor);
+  });
+
+  server.on("/covid", HTTP_GET, [](AsyncWebServerRequest *request){
+    gEventMsgID = MSG_RESETCOUNT;
+    request->send(SPIFFS, "/index.html", String(), false, processor);
   });
 
   // Start server
   server.begin();
 
-  printStatic("[AP]mode");
-
-  delay(2000);
-
+#if COVID_MODE
+  printScroll("        [Client] Mode");
+  printScroll("        Web server started.");
+  printScroll("        " + WiFi.localIP().toString());
+  //時刻取得
+  configTime( JST, 0, "ntp.nict.jp", "ntp.jst.mfeed.ad.jp");
+#else
+  printScroll("        [Access Point] Mode");
   printScroll("        Web server started.");
   printScroll("        " + myIP.toString());
-
-  //時刻取得
-  //configTime( JST, 0, "ntp.nict.jp", "ntp.jst.mfeed.ad.jp");
+#endif
 
   xMutex = xSemaphoreCreateMutex();
 
@@ -586,16 +606,59 @@ void setup() {
   }
 }
 
+//Is this Message Loop?
 void loop() {
 
-  if(nAttackCnt == 2){
-    vTaskDelete(hCovid);
-    nAttackCnt = 3;
+  switch(gEventMsgID){
+    case MSG_ATTACKCOUNTUP:
+      nAttackCnt += 1;
+      if(nAttackCnt == 4){
+        gEventMsgID = MSG_ATTACKEND;
+        return;
+      }
+    break;
+    case MSG_ATTACKEND:
+      vTaskDelete(hCovid);
+      Serial.printf("hCovid = %d\n", &hCovid);
+      hCovid = NULL;
+      gEventMsgID = MSG_PRINTMSG;
+      return;
+    break;
+    case MSG_PRINTMSG:
+      printStatic("We won!!");
+      delay(1000);
+      printScroll("      Stay at Home!!");
+      printScroll("      Stay blessed and healthy.");
+      printScroll("      もう一度、がんばろう日本！p(^ ^)q");
+      return;
+    break;
+    case MSG_RESETCOUNT:
+      xMutex = xSemaphoreCreateMutex();
+
+      if( xMutex != NULL ){
+        nAttackCnt = 0;
+        if(hCovid == NULL){
+          xTaskCreatePinnedToCore(CovidTask, "CovidTask", 4096, NULL, 2, &hCovid, 0);
+        }
+      }
+      else{
+        while(1){
+            Serial.println("rtos mutex create error, stopped");
+            delay(1000);
+        }
+      }
+    break;
+    default:
+      ;
   }
 
-  if(nAttackCnt == 3){
-    printStatic("We won!!");
-  }
+  gEventMsgID = MSG_NOTHING;
 
-  delay(10);
+  delay(1);
 }
+
+// ヘイ、シリ。アビガンを投与して
+// ヘイ、シリ。レムデシビルを投与して
+// ヘイ、シリ。コビッドを免疫で攻撃して
+// ヘイ、シリ。アマビエ様にお願いして
+// ヘイ、シリ。リセットカウント。
