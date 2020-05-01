@@ -63,6 +63,8 @@ SOFTWARE.
 #define MSG_PRINTMSG        0x0002
 #define MSG_ATTACKEND       0x0003
 #define MSG_ATTACKCOUNTUP   0x0004
+#define MSG_COVIDSTART      0x0005
+#define MSG_COVIDSTOP       0x0006
 
 //これらのファイルをSPIFFS領域へコピーしておくこと
 const char* UTF8SJIS_file         = "/Utf8Sjis.tbl";  //UTF8 Shift_JIS 変換テーブルファイル名を記載しておく
@@ -519,7 +521,8 @@ void setup() {
 
   // Route for root / web page
   server.on("/", HTTP_GET, [](AsyncWebServerRequest *request){  
-    printStatic(" Ready. ");
+    vTaskSuspend(hCovid);
+    printStatic("Connect ");
     request->send(SPIFFS, "/index.html", String(), false, processor);
   });
   
@@ -530,7 +533,6 @@ void setup() {
 
   // Route to set GPIO to HIGH
   server.on("/on", HTTP_GET, [](AsyncWebServerRequest *request){
-    vTaskSuspend(hCovid);
     printStatic("Starting");   
     //ここにタイマーを開始する処理を入れる
     request->send(SPIFFS, "/index.html", String(), false, processor);
@@ -538,7 +540,6 @@ void setup() {
   
   // Route to set GPIO to LOW
   server.on("/stop", HTTP_GET, [](AsyncWebServerRequest *request){
-    vTaskSuspend(hCovid);
     printStatic("Stopped.");   
     digitalWrite(ledPin, LOW);    
     request->send(SPIFFS, "/index.html", String(), false, processor);
@@ -573,10 +574,20 @@ void setup() {
     request->send(SPIFFS, "/index.html", String(), false, processor);
   });
 
-  server.on("/covid", HTTP_GET, [](AsyncWebServerRequest *request){
+  server.on("/covidreset", HTTP_GET, [](AsyncWebServerRequest *request){
     gEventMsgID = MSG_RESETCOUNT;
     request->send(SPIFFS, "/index.html", String(), false, processor);
   });
+
+  server.on("/covidstart", HTTP_GET, [](AsyncWebServerRequest *request){
+    gEventMsgID = MSG_COVIDSTART;
+    request->send(SPIFFS, "/index.html", String(), false, processor);
+  }); 
+
+  server.on("/covidstop", HTTP_GET, [](AsyncWebServerRequest *request){
+    gEventMsgID = MSG_COVIDSTOP;
+    request->send(SPIFFS, "/index.html", String(), false, processor);
+  }); 
 
   // Start server
   server.begin();
@@ -592,18 +603,11 @@ void setup() {
   printScroll("        Web server started.");
   printScroll("        " + myIP.toString());
 #endif
-
+  
   xMutex = xSemaphoreCreateMutex();
 
-  if( xMutex != NULL ){
-    xTaskCreatePinnedToCore(CovidTask, "CovidTask", 4096, NULL, 2, &hCovid, 0); //ClockTask開始
-  }
-  else{
-    while(1){
-        Serial.println("rtos mutex create error, stopped");
-        delay(1000);
-    }
-  }
+  gEventMsgID = MSG_RESETCOUNT;
+
 }
 
 //Is this Message Loop?
@@ -611,6 +615,7 @@ void loop() {
 
   switch(gEventMsgID){
     case MSG_ATTACKCOUNTUP:
+      Serial.println("enter MSG_ATTACKCOUNTUP");
       nAttackCnt += 1;
       if(nAttackCnt == 4){
         gEventMsgID = MSG_ATTACKEND;
@@ -618,13 +623,13 @@ void loop() {
       }
     break;
     case MSG_ATTACKEND:
-      vTaskDelete(hCovid);
-      Serial.printf("hCovid = %d\n", &hCovid);
-      hCovid = NULL;
+      Serial.println("enter MSG_ATTACKEND");
+      vTaskSuspend(hCovid);
       gEventMsgID = MSG_PRINTMSG;
       return;
     break;
     case MSG_PRINTMSG:
+      Serial.println("enter MSG_PRINTMSG");
       printStatic("We won!!");
       delay(1000);
       printScroll("      Stay at Home!!");
@@ -633,13 +638,16 @@ void loop() {
       return;
     break;
     case MSG_RESETCOUNT:
-      xMutex = xSemaphoreCreateMutex();
+      Serial.println("enter MSG_RESETCOUNT");
+      
+      nAttackCnt = 0;
 
+      if(hCovid != NULL){
+        vTaskDelete(hCovid);
+      }
+      //Covid Task作成
       if( xMutex != NULL ){
-        nAttackCnt = 0;
-        if(hCovid == NULL){
-          xTaskCreatePinnedToCore(CovidTask, "CovidTask", 4096, NULL, 2, &hCovid, 0);
-        }
+        xTaskCreatePinnedToCore(CovidTask, "CovidTask", 4096, NULL, 2, &hCovid, 0);
       }
       else{
         while(1){
@@ -647,6 +655,17 @@ void loop() {
             delay(1000);
         }
       }
+      gEventMsgID = MSG_COVIDSTOP;
+      return;
+    break;
+    case MSG_COVIDSTART:
+      Serial.println("enter MSG_COVIDSTART");
+      vTaskResume(hCovid);
+    break;
+    case MSG_COVIDSTOP:
+      Serial.println("enter MSG_COVIDSTOP");
+      vTaskSuspend(hCovid);
+      printStatic("Suspend.");
     break;
     default:
       ;
@@ -656,9 +675,9 @@ void loop() {
 
   delay(1);
 }
-
+// ヘイ、シリ。コロナサーバーをスタートして
 // ヘイ、シリ。アビガンを投与して
 // ヘイ、シリ。レムデシビルを投与して
-// ヘイ、シリ。コビッドを免疫で攻撃して
+// ヘイ、シリ。コロナウィルスを免疫で攻撃して
 // ヘイ、シリ。アマビエ様にお願いして
-// ヘイ、シリ。リセットカウント。
+// ヘイ、シリ。コロナサーバーをリセットして
