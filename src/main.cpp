@@ -84,7 +84,7 @@ const char *password = "room03601";
 int gEventMsgID = MSG_NOTHING;
 
 // Set LED GPIO
-const int ledPin = 2;
+const int ledPin = 4;
 // Stores LED state
 String ledState;
 
@@ -535,6 +535,11 @@ void setup() {
   server.on("/on", HTTP_GET, [](AsyncWebServerRequest *request){
     printStatic("Starting");   
     //ここにタイマーを開始する処理を入れる
+#if COVID_MODE
+    digitalWrite(ledPin, HIGH);
+    delay(50); 
+    digitalWrite(ledPin, LOW);
+#endif    
     request->send(SPIFFS, "/index.html", String(), false, processor);
   });
   
@@ -551,14 +556,15 @@ void setup() {
     printStatic("Attack!!");   
     delay(1000); 
     digitalWrite(ledPin, HIGH);
-    delay(500); 
-    digitalWrite(ledPin, LOW);    
+    delay(50); 
+    digitalWrite(ledPin, LOW); 
+    delay(1000); 
     printStatic(" *(> <)*");   
     delay(500); 
     printStatic("*(> <)* ");   
     delay(500); 
     printStatic(" Ouch!! ");
-    delay(1000); 
+    delay(500); 
     vTaskResume(hCovid);
     gEventMsgID = MSG_ATTACKCOUNTUP;
     request->send(SPIFFS, "/index.html", String(), false, processor);
@@ -589,6 +595,12 @@ void setup() {
     request->send(SPIFFS, "/index.html", String(), false, processor);
   }); 
 
+  server.on("/systemreset", HTTP_GET, [](AsyncWebServerRequest *request){
+    Serial.println("Reset");
+    ESP.restart();
+    request->send(SPIFFS, "/index.html", String(), false, processor);
+  }); 
+
   // Start server
   server.begin();
 
@@ -596,6 +608,7 @@ void setup() {
   printScroll("        [Client] Mode");
   printScroll("        Web server started.");
   printScroll("        " + WiFi.localIP().toString());
+  Serial.println(WiFi.localIP().toString());
   //時刻取得
   configTime( JST, 0, "ntp.nict.jp", "ntp.jst.mfeed.ad.jp");
 #else
@@ -606,6 +619,7 @@ void setup() {
   
   xMutex = xSemaphoreCreateMutex();
 
+  //タスク作成
   gEventMsgID = MSG_RESETCOUNT;
 
 }
@@ -617,7 +631,7 @@ void loop() {
     case MSG_ATTACKCOUNTUP:
       Serial.println("enter MSG_ATTACKCOUNTUP");
       nAttackCnt += 1;
-      if(nAttackCnt == 4){
+      if(nAttackCnt == 5){
         gEventMsgID = MSG_ATTACKEND;
         return;
       }
@@ -632,9 +646,9 @@ void loop() {
       Serial.println("enter MSG_PRINTMSG");
       printStatic("We won!!");
       delay(1000);
-      printScroll("      Stay at Home!!");
+      printScroll("      Stay Home!");
       printScroll("      Stay blessed and healthy.");
-      printScroll("      もう一度、がんばろう日本！p(^ ^)q");
+      printScroll("      手洗い、うがい、アルコールで感染を予防しましょう！");
       return;
     break;
     case MSG_RESETCOUNT:
@@ -644,6 +658,7 @@ void loop() {
 
       if(hCovid != NULL){
         vTaskDelete(hCovid);
+        hCovid = NULL;
       }
       //Covid Task作成
       if( xMutex != NULL ){
@@ -661,11 +676,12 @@ void loop() {
     case MSG_COVIDSTART:
       Serial.println("enter MSG_COVIDSTART");
       vTaskResume(hCovid);
+      printStatic("Start.  ");
     break;
     case MSG_COVIDSTOP:
       Serial.println("enter MSG_COVIDSTOP");
       vTaskSuspend(hCovid);
-      printStatic("Suspend.");
+      printStatic("Stopped.");
     break;
     default:
       ;
@@ -675,9 +691,11 @@ void loop() {
 
   delay(1);
 }
-// ヘイ、シリ。コロナサーバーをスタートして
-// ヘイ、シリ。アビガンを投与して
-// ヘイ、シリ。レムデシビルを投与して
-// ヘイ、シリ。コロナウィルスを免疫で攻撃して
+// ヘイ、シリ。システムリセット
+// ヘイ、シリ。スタート
+// ヘイ、シリ。手洗いうがい
+// ヘイ、シリ。アビガン
+// ヘイ、シリ。レムデシビル
+// ヘイ、シリ。キラーT細胞
 // ヘイ、シリ。アマビエ様にお願いして
-// ヘイ、シリ。コロナサーバーをリセットして
+// ヘイ、シリ。システムストップ
