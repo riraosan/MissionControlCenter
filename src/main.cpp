@@ -35,9 +35,9 @@ SOFTWARE.
 #include <WiFiClient.h>
 
 //ロケットローンチモードにするにはfalseにすること。
-#define COVID_MODE    true
+#define COVID_MODE true
 
-#define JST     3600* 9
+#define JST 3600 * 9
 
 //ポート設定
 #define PORT_SE_IN 13
@@ -52,30 +52,30 @@ SOFTWARE.
 #define PORT_DR_IN 16
 #define PORT_ALE_IN 22
 
-#define PANEL_NUM     2   //パネル枚数
-#define R             1   //赤色
-#define O             2   //橙色
-#define G             3   //緑色
-#define FONT_BUF_SIZE 80  //半角文字数
+#define PANEL_NUM 2      //パネル枚数
+#define R 1              //赤色
+#define O 2              //橙色
+#define G 3              //緑色
+#define FONT_BUF_SIZE 100 //半角文字数
 
-#define MSG_NOTHING         0x0000
-#define MSG_RESETCOUNT      0x0001
-#define MSG_PRINTMSG        0x0002
-#define MSG_ATTACKEND       0x0003
-#define MSG_ATTACKCOUNTUP   0x0004
-#define MSG_COVIDSTART      0x0005
-#define MSG_COVIDSTOP       0x0006
+#define MSG_NOTHING 0x0000
+#define MSG_COVIDRESET 0x0001
+#define MSG_PRINTMSG 0x0002
+#define MSG_ATTACKEND 0x0003
+#define MSG_ATTACKCOUNTUP 0x0004
+#define MSG_COVIDSTART 0x0005
+#define MSG_COVIDSTOP 0x0006
 
 //これらのファイルをSPIFFS領域へコピーしておくこと
-const char* UTF8SJIS_file         = "/Utf8Sjis.tbl";  //UTF8 Shift_JIS 変換テーブルファイル名を記載しておく
-const char* Shino_Zen_Font_file   = "/shnmk16.bdf";   //全角フォントファイル名を定義
-const char* Shino_Half_Font_file  = "/shnm8x16.bdf";  //半角フォントファイル名を定義
+const char *UTF8SJIS_file = "/Utf8Sjis.tbl";        //UTF8 Shift_JIS 変換テーブルファイル名を記載しておく
+const char *Shino_Zen_Font_file = "/shnmk16.bdf";   //全角フォントファイル名を定義
+const char *Shino_Half_Font_file = "/shnm8x16.bdf"; //半角フォントファイル名を定義
 
-ESP32_SPIFFS_ShinonomeFNT SFR;  //東雲フォントをSPIFFSから取得するライブラリ
+ESP32_SPIFFS_ShinonomeFNT SFR; //東雲フォントをSPIFFSから取得するライブラリ
 
 #if COVID_MODE
-const char* ssid = "Buffalo-G-FAA8";
-const char* password = "34ywce7cffyup";
+const char *ssid = "Buffalo-G-FAA8";
+const char *password = "34ywce7cffyup";
 #else
 const char *ssid = "ESP32-G-FAA8";
 const char *password = "room03601";
@@ -94,13 +94,15 @@ AsyncWebServer server(80);
 SemaphoreHandle_t xMutex = NULL;
 
 //LEDマトリクスの書き込みアドレスを設定するメソッド
-void setRAMAdder(uint8_t lineNumber){
+void setRAMAdder(uint8_t lineNumber)
+{
   uint8_t A[4] = {0};
   uint8_t adder = 0;
 
   adder = lineNumber;
 
-  for(int i = 0; i < 4; i++){    
+  for (int i = 0; i < 4; i++)
+  {
     A[i] = adder % 2;
     adder /= 2;
   }
@@ -109,7 +111,6 @@ void setRAMAdder(uint8_t lineNumber){
   digitalWrite(PORT_A1_IN, A[1]);
   digitalWrite(PORT_A2_IN, A[2]);
   digitalWrite(PORT_A3_IN, A[3]);
-
 }
 
 ////////////////////////////////////////////////////////////////////////////////////
@@ -117,42 +118,52 @@ void setRAMAdder(uint8_t lineNumber){
 //
 //iram_addr:データを書き込むアドレス（0~15）
 //ifont_data:フォント表示データ(32*PANEL_NUM bit)
-//color_data:フォント表示色配列（32*PANEL_NUM bit）Red:1 Orange:2 Green:3 
+//color_data:フォント表示色配列（32*PANEL_NUM bit）Red:1 Orange:2 Green:3
 ////////////////////////////////////////////////////////////////////////////////////
-void send_line_data(uint8_t iram_adder, uint8_t ifont_data[], uint8_t color_data[]){
+void send_line_data(uint8_t iram_adder, uint8_t ifont_data[], uint8_t color_data[])
+{
 
-  uint8_t font[8]   = {0};
-  uint8_t tmp_data  = 0;
+  uint8_t font[8] = {0};
+  uint8_t tmp_data = 0;
   int k = 0;
-  for(int j = 0; j < 4 * PANEL_NUM; j++){
+  for (int j = 0; j < 4 * PANEL_NUM; j++)
+  {
     //ビットデータに変換
-    tmp_data = ifont_data[j];   
-    for(int i = 0; i < 8; i++){    
+    tmp_data = ifont_data[j];
+    for (int i = 0; i < 8; i++)
+    {
       font[i] = tmp_data % 2;
       tmp_data /= 2;
     }
 
-    for(int i = 7; i >= 0; i--){
+    for (int i = 7; i >= 0; i--)
+    {
       digitalWrite(PORT_DG_IN, LOW);
       digitalWrite(PORT_DR_IN, LOW);
       digitalWrite(PORT_CLK_IN, LOW);
 
-      if(font[i] == 1){
-        if(color_data[k] == R ){
+      if (font[i] == 1)
+      {
+        if (color_data[k] == R)
+        {
           digitalWrite(PORT_DR_IN, HIGH);
         }
 
-        if(color_data[k] == G){
+        if (color_data[k] == G)
+        {
           digitalWrite(PORT_DG_IN, HIGH);
         }
 
-        if(color_data[k] == O){
+        if (color_data[k] == O)
+        {
           digitalWrite(PORT_DR_IN, HIGH);
           digitalWrite(PORT_DG_IN, HIGH);
         }
-      }else{
-          digitalWrite(PORT_DR_IN, LOW);
-          digitalWrite(PORT_DG_IN, LOW);
+      }
+      else
+      {
+        digitalWrite(PORT_DR_IN, LOW);
+        digitalWrite(PORT_DG_IN, LOW);
       }
 
       delayMicroseconds(1);
@@ -182,22 +193,32 @@ void send_line_data(uint8_t iram_adder, uint8_t ifont_data[], uint8_t color_data
 //len:配列の要素数
 //n:一度に左シフトするビット数
 ///////////////////////////////////////////////////////////////
-void shift_bit_left(uint8_t dist[], uint8_t src[], int len, int n){
+void shift_bit_left(uint8_t dist[], uint8_t src[], int len, int n)
+{
   uint8_t mask = 0xFF << (8 - n);
-  for(int i = 0; i < len; i++){
-    if(i < len - 1){
+  for (int i = 0; i < len; i++)
+  {
+    if (i < len - 1)
+    {
       dist[i] = (src[i] << n) | ((src[i + 1] & mask) >> (8 - n));
-    }else{
+    }
+    else
+    {
       dist[i] = src[i] << n;
     }
   }
 }
 
-void shift_color_left(uint8_t dist[], uint8_t src[], int len){
-  for(int i = 0; i < len * 8; i++){
-    if(i < len * 8 - 1){
+void shift_color_left(uint8_t dist[], uint8_t src[], int len)
+{
+  for (int i = 0; i < len * 8; i++)
+  {
+    if (i < len * 8 - 1)
+    {
       dist[i] = src[i + 1];
-    }else{
+    }
+    else
+    {
       dist[i] = 0;
     }
   }
@@ -211,7 +232,8 @@ void shift_color_left(uint8_t dist[], uint8_t src[], int len){
 //color_data:フォントカラーデータ（半角毎に設定する）
 //intervals:スクロール間隔(ms)
 ////////////////////////////////////////////////////////////////////
-void scrollLEDMatrix(int16_t sj_length, uint8_t font_data[][16], uint8_t color_data[], uint16_t intervals){
+void scrollLEDMatrix(int16_t sj_length, uint8_t font_data[][16], uint8_t color_data[], uint16_t intervals)
+{
   uint8_t src_line_data[sj_length] = {0};
   uint8_t dist_line_data[sj_length] = {0};
   uint8_t tmp_color_data[sj_length * 8] = {0};
@@ -219,25 +241,30 @@ void scrollLEDMatrix(int16_t sj_length, uint8_t font_data[][16], uint8_t color_d
   uint8_t ram = LOW;
 
   int n = 0;
-  for(int i = 0; i < sj_length; i++){
-  
+  for (int i = 0; i < sj_length; i++)
+  {
+
     //8ビット毎の色情報を1ビット毎に変換する
-    for(int j = 0; j < 8; j++){
+    for (int j = 0; j < 8; j++)
+    {
       tmp_color_data[n++] = color_data[i];
     }
-  
+
     //フォントデータを作業バッファにコピー
-    for(int j = 0; j < 16; j++){
+    for (int j = 0; j < 16; j++)
+    {
       tmp_font_data[i][j] = font_data[i][j];
     }
-
   }
 
-  for(int k = 0; k < sj_length * 8 + 2; k++){
+  for (int k = 0; k < sj_length * 8 + 2; k++)
+  {
     ram = ~ram;
-    digitalWrite(PORT_AB_IN, ram);//RAM-A/RAM-Bに書き込み
-    for(int i = 0; i < 16; i++){
-      for(int j = 0; j < sj_length; j++){       
+    digitalWrite(PORT_AB_IN, ram); //RAM-A/RAM-Bに書き込み
+    for (int i = 0; i < 16; i++)
+    {
+      for (int j = 0; j < sj_length; j++)
+      {
         //フォントデータをビットシフト元バッファにコピー
         src_line_data[j] = tmp_font_data[j][i];
       }
@@ -246,7 +273,8 @@ void scrollLEDMatrix(int16_t sj_length, uint8_t font_data[][16], uint8_t color_d
       shift_bit_left(dist_line_data, src_line_data, sj_length, 1);
 
       //font_dataにシフトしたあとのデータを書き込む
-      for(int j = 0; j < sj_length; j++){
+      for (int j = 0; j < sj_length; j++)
+      {
         tmp_font_data[j][i] = dist_line_data[j];
       }
     }
@@ -262,42 +290,50 @@ void scrollLEDMatrix(int16_t sj_length, uint8_t font_data[][16], uint8_t color_d
 //font_data:フォントデータ（東雲フォント）
 //color_data:フォントカラーデータ（半角毎に設定する）//
 ////////////////////////////////////////////////////////////////////
-void printLEDMatrix(int16_t sj_length, uint8_t font_data[][16], uint8_t color_data[]){
+void printLEDMatrix(int16_t sj_length, uint8_t font_data[][16], uint8_t color_data[])
+{
   uint8_t src_line_data[sj_length] = {0};
   uint8_t tmp_color_data[sj_length * 8] = {0};
   uint8_t tmp_font_data[sj_length][16] = {0};
   uint8_t ram = LOW;
 
   int n = 0;
-  for(int i = 0; i < sj_length; i++){
-  
+  for (int i = 0; i < sj_length; i++)
+  {
+
     //8ビット毎の色情報を1ビット毎に変換する
-    for(int j = 0; j < 8; j++){
+    for (int j = 0; j < 8; j++)
+    {
       tmp_color_data[n++] = color_data[i];
     }
-  
+
     //フォントデータを作業バッファにコピー
-    for(int j = 0; j < 16; j++){
+    for (int j = 0; j < 16; j++)
+    {
       tmp_font_data[i][j] = font_data[i][j];
     }
   }
 
-  for(int k = 0; k < sj_length * 8 + 2; k++){
+  for (int k = 0; k < sj_length * 8 + 2; k++)
+  {
     ram = ~ram;
-    digitalWrite(PORT_AB_IN, ram);//RAM-A/RAM-Bに書き込み
-    for(int i = 0; i < 16; i++){
-      for(int j = 0; j < sj_length; j++){       
+    digitalWrite(PORT_AB_IN, ram); //RAM-A/RAM-Bに書き込み
+    for (int i = 0; i < 16; i++)
+    {
+      for (int j = 0; j < sj_length; j++)
+      {
         //フォントデータをビットシフト元バッファにコピー
         src_line_data[j] = tmp_font_data[j][i];
       }
 
-    //    shift_bit_left(dist_line_data, src_line_data, sj_length, 1);
+      //    shift_bit_left(dist_line_data, src_line_data, sj_length, 1);
       send_line_data(i, src_line_data, tmp_color_data);
     }
   }
 }
 
-void setAllPortOutput(){
+void setAllPortOutput()
+{
   pinMode(PORT_SE_IN, OUTPUT);
   pinMode(PORT_AB_IN, OUTPUT);
   pinMode(PORT_A3_IN, OUTPUT);
@@ -311,7 +347,8 @@ void setAllPortOutput(){
   pinMode(PORT_ALE_IN, OUTPUT);
 }
 
-void setAllPortLow(){
+void setAllPortLow()
+{
   digitalWrite(PORT_SE_IN, LOW);
   digitalWrite(PORT_AB_IN, LOW);
   digitalWrite(PORT_A3_IN, LOW);
@@ -325,7 +362,8 @@ void setAllPortLow(){
   digitalWrite(PORT_ALE_IN, LOW);
 }
 
-void setAllPortHigh(){
+void setAllPortHigh()
+{
   digitalWrite(PORT_SE_IN, HIGH);
   digitalWrite(PORT_AB_IN, HIGH);
   digitalWrite(PORT_A3_IN, HIGH);
@@ -348,16 +386,37 @@ void PrintTime(String &str, int flag)
   t = time(NULL);
   tm = localtime(&t);
 
-  if(flag == 0){
+  if (flag == 0)
+  {
     sprintf(tmp_str, "  %02d:%02d ", tm->tm_hour, tm->tm_min);
-  }else{
+  }
+  else
+  {
     sprintf(tmp_str, "  %02d %02d ", tm->tm_hour, tm->tm_min);
   }
 
   str = tmp_str;
 }
 
-void printTimeLEDMatrix(){
+void PrintTime(){
+
+  time_t t;
+  struct tm *tm;
+
+  t = time(NULL);
+  tm = localtime(&t);
+
+  Serial.printf("%d年%d月%d日%d時%d分%d秒\n",tm->tm_year + 1900, 
+                                            tm->tm_mon + 1,
+                                            tm->tm_mday,
+                                            tm->tm_hour,
+                                            tm->tm_min,
+                                            tm->tm_sec);
+
+}
+
+void printTimeLEDMatrix()
+{
   //フォントデータバッファ
   uint8_t time_font_buf[8][16] = {0};
   String str;
@@ -368,19 +427,21 @@ void printTimeLEDMatrix(){
   PrintTime(str, flag);
 
   //フォント色データ　str（半角文字毎に設定する）
-  uint8_t time_font_color[8] = {G,G,G,G,G,G,G,G};
+  uint8_t time_font_color[8] = {G, G, G, G, G, G, G, G};
   uint16_t sj_length = SFR.StrDirect_ShinoFNT_readALL(str, time_font_buf);
   printLEDMatrix(sj_length, time_font_buf, time_font_color);
 }
 
-void printStatic(String staticStr){
+void printStatic(String staticStr)
+{
   //フォントデータバッファ
   uint8_t font_buf[8][16] = {0};
   //フォント色データ（半角文字毎に設定する）
-  uint8_t font_color[8] = {G,G,G,G,G,G,G,G};
+  uint8_t font_color[8] = {G, G, G, G, G, G, G, G};
+
+  uint16_t sj_length = SFR.StrDirect_ShinoFNT_readALL(staticStr, font_buf);
   
-  if(staticStr.length() - 2 < 8 + 1){
-    uint16_t sj_length = SFR.StrDirect_ShinoFNT_readALL(staticStr, font_buf);
+  if (sj_length < 9){
     printLEDMatrix(sj_length, font_buf, font_color);
   }
   else{
@@ -388,21 +449,25 @@ void printStatic(String staticStr){
   }
 }
 
-void printScroll(String scrollStr){
+void printScroll(String scrollStr)
+{
   //フォントデータバッファ
   uint8_t font_buf[FONT_BUF_SIZE][16] = {0};
   //フォント色データ　str1（半角文字毎に設定する）
-  uint8_t font_color[FONT_BUF_SIZE] = { G,G,G,G,G,G,G,G,G,G,
-                                        G,G,G,G,G,G,G,G,G,G,
-                                        G,G,G,G,G,G,G,G,G,G,
-                                        G,G,G,G,G,G,G,G,G,G,
-                                        G,G,G,G,G,G,G,G,G,G,
-                                        G,G,G,G,G,G,G,G,G,G,
-                                        G,G,G,G,G,G,G,G,G,G,
-                                        G,G,G,G,G,G,G,G,G,G};
+  uint8_t font_color[FONT_BUF_SIZE] = {G, G, G, G, G, G, G, G, G, G,
+                                       G, G, G, G, G, G, G, G, G, G,
+                                       G, G, G, G, G, G, G, G, G, G,
+                                       G, G, G, G, G, G, G, G, G, G,
+                                       G, G, G, G, G, G, G, G, G, G,
+                                       G, G, G, G, G, G, G, G, G, G,
+                                       G, G, G, G, G, G, G, G, G, G,
+                                       G, G, G, G, G, G, G, G, G, G,
+                                       G, G, G, G, G, G, G, G, G, G,
+                                       G, G, G, G, G, G, G, G, G, G};
 
-  if(scrollStr.length() - 2 < FONT_BUF_SIZE + 1){
-    uint16_t sj_length = SFR.StrDirect_ShinoFNT_readALL(scrollStr, font_buf);
+  uint16_t sj_length = SFR.StrDirect_ShinoFNT_readALL(scrollStr, font_buf);
+  
+  if (sj_length < FONT_BUF_SIZE + 1){
     scrollLEDMatrix(sj_length, font_buf, font_color, 30);
   }
   else{
@@ -412,51 +477,59 @@ void printScroll(String scrollStr){
 
 TaskHandle_t hCovid = NULL;
 
-void CovidTask(void *pvParameters) {
+void CovidTask(void *pvParameters)
+{
   Serial.printf("CovidTask coreID = %d, CovidTask priority = %d\n", xPortGetCoreID(), uxTaskPriorityGet(hCovid));
 
   BaseType_t xStatus;
   const TickType_t xTicksToWait = 1000UL;
   xSemaphoreGive(xMutex);
 
-  while(1){
-      xStatus = xSemaphoreTake(xMutex, xTicksToWait);
-      Serial.println("check for mutex (CovidTask)");
+  while (1)
+  {
+    xStatus = xSemaphoreTake(xMutex, xTicksToWait);
+    Serial.println("check for mutex (CovidTask)");
+    PrintTime();
+    
+    if (xStatus == pdTRUE)
+    {
+      printStatic("Im COVID");
+      delay(1000);
+      printStatic("｀∇´ψ");
+      delay(500);
+      printStatic("ψ｀∇´");
+      delay(1000);
+      printStatic("Im COVID");
+      delay(1000);
+      printStatic("(｀∇´O");
+      delay(500);
+      printStatic("O(｀∇´");
+      delay(1000);
+      printStatic("Im COVID");
+      delay(1000);
+      printStatic("｀∇´) ");
+      delay(500);
+      printStatic(" (｀∇´");
+      delay(1000);
+    }
 
-      if(xStatus == pdTRUE){
-        printStatic("Im COVID");
-        delay(1000);
-        printStatic("｀∇´ψ");
-        delay(1000);
-        printStatic("We Kill");
-        delay(1000);
-        printStatic("humanity");
-        delay(1000);
-        printStatic("O(｀∇´");
-        delay(1000);
-        printScroll("        Don't wash");
-        printStatic("｀∇´ψ");
-        delay(1000);
-        printScroll("        your hands!!");
-        printStatic("O(｀∇´");
-        delay(1000);
-        printStatic("(｀∇´)");
-        delay(2000);
-      }
-
-      xSemaphoreGive(xMutex);
-      delay(1);
+    xSemaphoreGive(xMutex);
+    delay(1);
   }
 }
 
 // Replaces placeholder with LED state value
-String processor(const String& var){
+String processor(const String &var)
+{
   Serial.println(var);
-  if(var == "STATE"){
-    if(digitalRead(ledPin)){
+  if (var == "STATE")
+  {
+    if (digitalRead(ledPin))
+    {
       ledState = "ON";
     }
-    else{
+    else
+    {
       ledState = "OFF";
     }
     Serial.print(ledState);
@@ -467,7 +540,8 @@ String processor(const String& var){
 
 int nAttackCnt = 0;
 
-void setup() {
+void setup()
+{
 
   delay(1000);
   setAllPortOutput();
@@ -477,13 +551,14 @@ void setup() {
   digitalWrite(PORT_SE_IN, HIGH);
 
   SFR.SPIFFS_Shinonome_Init3F(UTF8SJIS_file, Shino_Half_Font_file, Shino_Zen_Font_file);
- 
+
   // Serial port for debugging purposes
   Serial.begin(115200);
   pinMode(ledPin, OUTPUT);
 
   // Initialize SPIFFS
-  if(!SPIFFS.begin(true)){
+  if (!SPIFFS.begin(true))
+  {
     Serial.println("An Error has occurred while mounting SPIFFS");
     return;
   }
@@ -491,10 +566,17 @@ void setup() {
 #if COVID_MODE
   // Connect to Wi-Fi
   WiFi.begin(ssid, password);
-  while (WiFi.status() != WL_CONNECTED) {
-     delay(1000);
-     Serial.println("Connecting to WiFi..");
+  while (WiFi.status() != WL_CONNECTED)
+  {
+    delay(1000);
+    Serial.println("Connecting to WiFi..");
   }
+  
+  //時刻取得
+  configTime(JST, 0, "ntp.nict.jp", "ntp.jst.mfeed.ad.jp");
+
+  PrintTime();
+
 #else
   Serial.println();
   Serial.println("Configuring access point...");
@@ -505,13 +587,15 @@ void setup() {
   IPAddress myIP = WiFi.softAPIP();
   Serial.print("AP IP address: ");
   Serial.println(myIP);
- 
+
   /* Set up mDNS */
-  if (!MDNS.begin("esp32")) {
-      Serial.println("Error setting up MDNS responder!");
-      while(1) {
-          delay(1000);
-      }
+  if (!MDNS.begin("esp32"))
+  {
+    Serial.println("Error setting up MDNS responder!");
+    while (1)
+    {
+      delay(1000);
+    }
   }
   Serial.println("mDNS responder started");
 
@@ -520,171 +604,185 @@ void setup() {
 #endif
 
   // Route for root / web page
-  server.on("/", HTTP_GET, [](AsyncWebServerRequest *request){  
+  server.on("/", HTTP_GET, [](AsyncWebServerRequest *request) {
     vTaskSuspend(hCovid);
     printStatic("Connect ");
     request->send(SPIFFS, "/index.html", String(), false, processor);
   });
-  
+
   // Route to load style.css file
-  server.on("/style.css", HTTP_GET, [](AsyncWebServerRequest *request){
+  server.on("/style.css", HTTP_GET, [](AsyncWebServerRequest *request) {
     request->send(SPIFFS, "/style.css", "text/css");
   });
 
   // Route to set GPIO to HIGH
-  server.on("/on", HTTP_GET, [](AsyncWebServerRequest *request){
-    printStatic("Starting");   
+  server.on("/on", HTTP_GET, [](AsyncWebServerRequest *request) {
+    printStatic("Starting");
     //ここにタイマーを開始する処理を入れる
 #if COVID_MODE
     digitalWrite(ledPin, HIGH);
-    delay(50); 
+    delay(50);
     digitalWrite(ledPin, LOW);
-#endif    
+#endif
     request->send(SPIFFS, "/index.html", String(), false, processor);
   });
-  
+
   // Route to set GPIO to LOW
-  server.on("/stop", HTTP_GET, [](AsyncWebServerRequest *request){
-    printStatic("Stopped.");   
-    digitalWrite(ledPin, LOW);    
+  server.on("/stop", HTTP_GET, [](AsyncWebServerRequest *request) {
+    printStatic("Stopped.");
+    digitalWrite(ledPin, LOW);
     request->send(SPIFFS, "/index.html", String(), false, processor);
   });
 
-  // Attack the COVID virus
-  server.on("/attack", HTTP_GET, [](AsyncWebServerRequest *request){
-    vTaskSuspend(hCovid);
-    printStatic("Attack!!");   
-    delay(1000); 
+  // Spark discharge
+  server.on("/spark", HTTP_GET, [](AsyncWebServerRequest *request) {
     digitalWrite(ledPin, HIGH);
-    delay(50); 
-    digitalWrite(ledPin, LOW); 
-    delay(1000); 
-    printStatic(" *(> <)*");   
-    delay(500); 
-    printStatic("*(> <)* ");   
-    delay(500); 
-    printStatic(" Ouch!! ");
-    delay(500); 
-    vTaskResume(hCovid);
-    gEventMsgID = MSG_ATTACKCOUNTUP;
-    request->send(SPIFFS, "/index.html", String(), false, processor);
-  });
-  
-  // Kill the COVID virus
-  server.on("/kill", HTTP_GET, [](AsyncWebServerRequest *request){
+    delay(50);
+    digitalWrite(ledPin, LOW);
     vTaskSuspend(hCovid);
-    printStatic("(((* *))");   
-    delay(3000); 
+    delay(500);
+    printStatic("(・ ・)?");
+    delay(500);
+    printStatic("?(・ ・)");
+    delay(500);
+    printStatic("(・ ・)?");
+    delay(500);
+    printStatic("?(・ ・)");
+    delay(500);
+    vTaskResume(hCovid);
+    request->send(SPIFFS, "/index.html", String(), false, processor);
+  });
+
+  // handwash
+  server.on("/handwash", HTTP_GET, [](AsyncWebServerRequest *request) {
+    vTaskSuspend(hCovid);
+    printStatic(" ((* *))");
+    delay(500);
+    printStatic("((* *)) ");
+    delay(500);
+    printStatic(" ((* *))");
+    delay(500);
+    printStatic("((* *)) ");
+    delay(500);
     vTaskResume(hCovid);
     gEventMsgID = MSG_ATTACKCOUNTUP;
     request->send(SPIFFS, "/index.html", String(), false, processor);
   });
 
-  server.on("/covidreset", HTTP_GET, [](AsyncWebServerRequest *request){
-    gEventMsgID = MSG_RESETCOUNT;
+  server.on("/covidreset", HTTP_GET, [](AsyncWebServerRequest *request) {
+    gEventMsgID = MSG_COVIDRESET;
     request->send(SPIFFS, "/index.html", String(), false, processor);
   });
 
-  server.on("/covidstart", HTTP_GET, [](AsyncWebServerRequest *request){
+  server.on("/covidstart", HTTP_GET, [](AsyncWebServerRequest *request) {
     gEventMsgID = MSG_COVIDSTART;
     request->send(SPIFFS, "/index.html", String(), false, processor);
-  }); 
+  });
 
-  server.on("/covidstop", HTTP_GET, [](AsyncWebServerRequest *request){
+  server.on("/covidstop", HTTP_GET, [](AsyncWebServerRequest *request) {
     gEventMsgID = MSG_COVIDSTOP;
     request->send(SPIFFS, "/index.html", String(), false, processor);
-  }); 
+  });
 
-  server.on("/systemreset", HTTP_GET, [](AsyncWebServerRequest *request){
+  server.on("/systemreset", HTTP_GET, [](AsyncWebServerRequest *request) {
     Serial.println("Reset");
     ESP.restart();
     request->send(SPIFFS, "/index.html", String(), false, processor);
-  }); 
+  });
 
   // Start server
   server.begin();
 
 #if COVID_MODE
-  printScroll("        [Client] Mode");
-  printScroll("        Web server started.");
-  printScroll("        " + WiFi.localIP().toString());
+  //printScroll("        [Client] Mode");
+  //printScroll("        Web server started.");
+  //printScroll("        " + WiFi.localIP().toString());
+  Serial.println("[Client] Mode");
+  Serial.println("Web server started.");
   Serial.println(WiFi.localIP().toString());
-  //時刻取得
-  configTime( JST, 0, "ntp.nict.jp", "ntp.jst.mfeed.ad.jp");
 #else
   printScroll("        [Access Point] Mode");
   printScroll("        Web server started.");
   printScroll("        " + myIP.toString());
+  Serial.println("[Access Point] Mode");
+  Serial.println("Web server started.");
+  Serial.println(myIP.toString());
 #endif
-  
+
   xMutex = xSemaphoreCreateMutex();
 
   //タスク作成
-  gEventMsgID = MSG_RESETCOUNT;
-
+  gEventMsgID = MSG_COVIDRESET;
 }
 
 //Is this Message Loop?
-void loop() {
+void loop()
+{
 
-  switch(gEventMsgID){
-    case MSG_ATTACKCOUNTUP:
-      Serial.println("enter MSG_ATTACKCOUNTUP");
-      nAttackCnt += 1;
-      if(nAttackCnt == 5){
-        gEventMsgID = MSG_ATTACKEND;
-        return;
-      }
-    break;
-    case MSG_ATTACKEND:
-      Serial.println("enter MSG_ATTACKEND");
-      vTaskSuspend(hCovid);
-      gEventMsgID = MSG_PRINTMSG;
+  switch (gEventMsgID)
+  {
+  case MSG_ATTACKCOUNTUP:
+    Serial.println("enter MSG_ATTACKCOUNTUP");
+    nAttackCnt += 1;
+    if (nAttackCnt == 3)
+    {
+      gEventMsgID = MSG_ATTACKEND;
       return;
+    }
     break;
-    case MSG_PRINTMSG:
-      Serial.println("enter MSG_PRINTMSG");
-      printStatic("We won!!");
-      delay(1000);
-      printScroll("      Stay Home!");
-      printScroll("      Stay blessed and healthy.");
-      printScroll("      手洗い、うがい、アルコールで感染を予防しましょう！");
-      return;
+  case MSG_ATTACKEND:
+    Serial.println("enter MSG_ATTACKEND");
+    vTaskSuspend(hCovid);
+    gEventMsgID = MSG_PRINTMSG;
+    return;
     break;
-    case MSG_RESETCOUNT:
-      Serial.println("enter MSG_RESETCOUNT");
-      
-      nAttackCnt = 0;
+  case MSG_PRINTMSG:
+    Serial.println("enter MSG_PRINTMSG");
+    printStatic("コロナに");
+    delay(1000);
+    printStatic("勝利！！");
+    delay(1000);
+    printScroll("        手洗い、うがい、アルコール消毒で感染拡大を阻止しましょう！！");
+    PrintTime();
+    return;
+    break;
+  case MSG_COVIDRESET:
+    Serial.println("enter MSG_COVIDRESET");
 
-      if(hCovid != NULL){
-        vTaskDelete(hCovid);
-        hCovid = NULL;
+    nAttackCnt = 0;
+
+    if (hCovid != NULL)
+    {
+      vTaskDelete(hCovid);
+      hCovid = NULL;
+    }
+    //Covid Task作成
+    if (xMutex != NULL)
+    {
+      xTaskCreatePinnedToCore(CovidTask, "CovidTask", 4096, NULL, 2, &hCovid, 0);
+    }
+    else
+    {
+      while (1)
+      {
+        Serial.println("rtos mutex create error, stopped");
+        delay(1000);
       }
-      //Covid Task作成
-      if( xMutex != NULL ){
-        xTaskCreatePinnedToCore(CovidTask, "CovidTask", 4096, NULL, 2, &hCovid, 0);
-      }
-      else{
-        while(1){
-            Serial.println("rtos mutex create error, stopped");
-            delay(1000);
-        }
-      }
-      gEventMsgID = MSG_COVIDSTOP;
-      return;
+    }
+    gEventMsgID = MSG_COVIDSTART;
+    return;
     break;
-    case MSG_COVIDSTART:
-      Serial.println("enter MSG_COVIDSTART");
-      vTaskResume(hCovid);
-      printStatic("Start.  ");
+  case MSG_COVIDSTART:
+    Serial.println("enter MSG_COVIDSTART");
+    vTaskResume(hCovid);
+    //printStatic("Start.  ");
     break;
-    case MSG_COVIDSTOP:
-      Serial.println("enter MSG_COVIDSTOP");
-      vTaskSuspend(hCovid);
-      printStatic("Stopped.");
+  case MSG_COVIDSTOP:
+    Serial.println("enter MSG_COVIDSTOP");
+    vTaskSuspend(hCovid);
+    //printStatic("Stopped.");
     break;
-    default:
-      ;
+  default:;
   }
 
   gEventMsgID = MSG_NOTHING;
@@ -692,10 +790,7 @@ void loop() {
   delay(1);
 }
 // ヘイ、シリ。システムリセット
-// ヘイ、シリ。スタート
-// ヘイ、シリ。手洗いうがい
-// ヘイ、シリ。アビガン
-// ヘイ、シリ。レムデシビル
-// ヘイ、シリ。キラーT細胞
-// ヘイ、シリ。アマビエ様にお願いして
-// ヘイ、シリ。システムストップ
+// ヘイ、シリ。コロナウィルスに電撃を加えて
+// ヘイ、シリ。手洗いうがいを世界に広めて
+// ヘイ、シリ。手洗いうがいを世界に広めて
+// ヘイ、シリ。手洗いうがいを世界に広めて
