@@ -30,12 +30,11 @@ SOFTWARE.
 #include "WiFi.h"
 #include "ESPAsyncWebServer.h"
 #include "SPIFFS.h"
-
 #include <ESPmDNS.h>
 #include <WiFiClient.h>
+#include <Servo.h>
 
-//ロケットローンチモードにするにはfalseにすること。
-#define COVID_MODE true
+#define ESP32_AP_MODE false
 
 #define JST 3600 * 9
 
@@ -58,14 +57,6 @@ SOFTWARE.
 #define G 3              //緑色
 #define FONT_BUF_SIZE 100 //半角文字数
 
-#define MSG_NOTHING 0x0000
-#define MSG_COVIDRESET 0x0001
-#define MSG_PRINTMSG 0x0002
-#define MSG_ATTACKEND 0x0003
-#define MSG_ATTACKCOUNTUP 0x0004
-#define MSG_COVIDSTART 0x0005
-#define MSG_COVIDSTOP 0x0006
-
 //これらのファイルをSPIFFS領域へコピーしておくこと
 const char *UTF8SJIS_file = "/Utf8Sjis.tbl";        //UTF8 Shift_JIS 変換テーブルファイル名を記載しておく
 const char *Shino_Zen_Font_file = "/shnmk16.bdf";   //全角フォントファイル名を定義
@@ -73,15 +64,13 @@ const char *Shino_Half_Font_file = "/shnm8x16.bdf"; //半角フォントファ�
 
 ESP32_SPIFFS_ShinonomeFNT SFR; //東雲フォントをSPIFFSから取得するライブラリ
 
-#if COVID_MODE
+#if ESP32_AP_MODE 
+const char *ssid = "ESP32-G-AP";
+const char *password = "room03601";
+#else
 const char *ssid = "Buffalo-G-FAA8";
 const char *password = "34ywce7cffyup";
-#else
-const char *ssid = "ESP32-G-FAA8";
-const char *password = "room03601";
 #endif
-
-int gEventMsgID = MSG_NOTHING;
 
 // Set LED GPIO
 const int ledPin = 4;
@@ -91,7 +80,14 @@ String ledState;
 // Create AsyncWebServer object on port 80
 AsyncWebServer server(80);
 
-SemaphoreHandle_t xMutex = NULL;
+static const int SERVO_NUM = 14;
+
+Servo myservo;            
+
+#define MSG_NOTHING     0x00
+#define MSG_TIMER_START 0x01
+
+int gMsgEventID = MSG_NOTHING;
 
 //LEDマトリクスの書き込みアドレスを設定するメソッド
 void setRAMAdder(uint8_t lineNumber)
@@ -475,74 +471,30 @@ void printScroll(String scrollStr)
   }
 }
 
-TaskHandle_t hCovid = NULL;
+void ReleaseRocket(){
 
-void CovidTask(void *pvParameters)
-{
-  Serial.printf("CovidTask coreID = %d, CovidTask priority = %d\n", xPortGetCoreID(), uxTaskPriorityGet(hCovid));
 
-  BaseType_t xStatus;
-  const TickType_t xTicksToWait = 1000UL;
-  xSemaphoreGive(xMutex);
-
-  while (1)
-  {
-    xStatus = xSemaphoreTake(xMutex, xTicksToWait);
-    Serial.println("check for mutex (CovidTask)");
-    PrintTime();
-    
-    if (xStatus == pdTRUE)
-    {
-      printStatic("Im COVID");
-      delay(1000);
-      printStatic("｀∇´ψ");
-      delay(500);
-      printStatic("ψ｀∇´");
-      delay(1000);
-      printStatic("Im COVID");
-      delay(1000);
-      printStatic("(｀∇´O");
-      delay(500);
-      printStatic("O(｀∇´");
-      delay(1000);
-      printStatic("Im COVID");
-      delay(1000);
-      printStatic("｀∇´) ");
-      delay(500);
-      printStatic(" (｀∇´");
-      delay(1000);
-    }
-
-    xSemaphoreGive(xMutex);
-    delay(1);
-  }
 }
 
 // Replaces placeholder with LED state value
 String processor(const String &var)
 {
   Serial.println(var);
-  if (var == "STATE")
-  {
-    if (digitalRead(ledPin))
-    {
+  if (var == "STATE"){
+    if (digitalRead(ledPin)){
       ledState = "ON";
     }
-    else
-    {
+    else{
       ledState = "OFF";
     }
-    Serial.print(ledState);
+    Serial.println(ledState);
     return ledState;
   }
   return String();
 }
 
-int nAttackCnt = 0;
-
 void setup()
 {
-
   delay(1000);
   setAllPortOutput();
   setAllPortLow();
@@ -552,9 +504,14 @@ void setup()
 
   SFR.SPIFFS_Shinonome_Init3F(UTF8SJIS_file, Shino_Half_Font_file, Shino_Zen_Font_file);
 
+  myservo.attach(SERVO_NUM);
+  //pinMode(SERVO_NUM, OUTPUT);
+  
   // Serial port for debugging purposes
   Serial.begin(115200);
   pinMode(ledPin, OUTPUT);
+
+  printStatic("Init....");
 
   // Initialize SPIFFS
   if (!SPIFFS.begin(true))
@@ -563,7 +520,7 @@ void setup()
     return;
   }
 
-#if COVID_MODE
+#if (ESP32_AP_MODE == false)
   // Connect to Wi-Fi
   WiFi.begin(ssid, password);
   while (WiFi.status() != WL_CONNECTED)
@@ -605,95 +562,40 @@ void setup()
 
   // Route for root / web page
   server.on("/", HTTP_GET, [](AsyncWebServerRequest *request) {
-    vTaskSuspend(hCovid);
-    printStatic("Connect ");
+    Serial.println("Route for root / web page");
+    printStatic("Connect.");
     request->send(SPIFFS, "/index.html", String(), false, processor);
   });
 
   // Route to load style.css file
   server.on("/style.css", HTTP_GET, [](AsyncWebServerRequest *request) {
+    Serial.println("Route to load style.css file");
     request->send(SPIFFS, "/style.css", "text/css");
   });
 
-  // Route to set GPIO to HIGH
-  server.on("/on", HTTP_GET, [](AsyncWebServerRequest *request) {
-    printStatic("Starting");
-    //ここにタイマーを開始する処理を入れる
-#if COVID_MODE
-    digitalWrite(ledPin, HIGH);
-    delay(50);
-    digitalWrite(ledPin, LOW);
-#endif
+  // タイマーを開始する
+  server.on("/startcountdown", HTTP_GET, [](AsyncWebServerRequest *request) {
+    Serial.println("/startcountdown");
+    printStatic("TimerON");
+    delay(1000);
+    gMsgEventID = MSG_TIMER_START;
     request->send(SPIFFS, "/index.html", String(), false, processor);
   });
 
-  // Route to set GPIO to LOW
-  server.on("/stop", HTTP_GET, [](AsyncWebServerRequest *request) {
+  //タイマーをOFFする
+  server.on("/stopcountdown", HTTP_GET, [](AsyncWebServerRequest *request) {
+    Serial.println("/stopcountdown");
     printStatic("Stopped.");
-    digitalWrite(ledPin, LOW);
+    //リセット
+    myservo.write(0);
+    gMsgEventID = MSG_NOTHING;
     request->send(SPIFFS, "/index.html", String(), false, processor);
   });
 
-  // Spark discharge
-  server.on("/spark", HTTP_GET, [](AsyncWebServerRequest *request) {
-    digitalWrite(ledPin, HIGH);
-    delay(50);
-    digitalWrite(ledPin, LOW);
-    vTaskSuspend(hCovid);
-    delay(500);
-    printStatic("(・ ・)?");
-    delay(500);
-    printStatic("?(・ ・)");
-    delay(500);
-    printStatic("(・ ・)?");
-    delay(500);
-    printStatic("?(・ ・)");
-    delay(500);
-    vTaskResume(hCovid);
-    request->send(SPIFFS, "/index.html", String(), false, processor);
-  });
-
-  // handwash
-  server.on("/handwash", HTTP_GET, [](AsyncWebServerRequest *request) {
-    vTaskSuspend(hCovid);
-    printStatic(" ((* *))");
-    delay(500);
-    printStatic("((* *)) ");
-    delay(500);
-    printStatic(" ((* *))");
-    delay(500);
-    printStatic("((* *)) ");
-    delay(500);
-    vTaskResume(hCovid);
-    gEventMsgID = MSG_ATTACKCOUNTUP;
-    request->send(SPIFFS, "/index.html", String(), false, processor);
-  });
-
-  server.on("/covidreset", HTTP_GET, [](AsyncWebServerRequest *request) {
-    gEventMsgID = MSG_COVIDRESET;
-    request->send(SPIFFS, "/index.html", String(), false, processor);
-  });
-
-  server.on("/covidstart", HTTP_GET, [](AsyncWebServerRequest *request) {
-    gEventMsgID = MSG_COVIDSTART;
-    request->send(SPIFFS, "/index.html", String(), false, processor);
-  });
-
-  server.on("/covidstop", HTTP_GET, [](AsyncWebServerRequest *request) {
-    gEventMsgID = MSG_COVIDSTOP;
-    request->send(SPIFFS, "/index.html", String(), false, processor);
-  });
-
-  server.on("/systemreset", HTTP_GET, [](AsyncWebServerRequest *request) {
-    Serial.println("Reset");
-    ESP.restart();
-    request->send(SPIFFS, "/index.html", String(), false, processor);
-  });
-
-  // Start server
+  //Webサーバー開始
   server.begin();
 
-#if COVID_MODE
+#if (ESP32_AP_MODE == flase)
   //printScroll("        [Client] Mode");
   //printScroll("        Web server started.");
   //printScroll("        " + WiFi.localIP().toString());
@@ -709,88 +611,45 @@ void setup()
   Serial.println(myIP.toString());
 #endif
 
-  xMutex = xSemaphoreCreateMutex();
+  myservo.write(0);
 
-  //タスク作成
-  gEventMsgID = MSG_COVIDRESET;
+  printStatic("Ready...");
 }
 
-//Is this Message Loop?
+//Event Message Loop
 void loop()
 {
+  char tmp_str[10] = {0};
+  static int nCount = 10;
+  String sCountDown;
 
-  switch (gEventMsgID)
-  {
-  case MSG_ATTACKCOUNTUP:
-    Serial.println("enter MSG_ATTACKCOUNTUP");
-    nAttackCnt += 1;
-    if (nAttackCnt == 3)
-    {
-      gEventMsgID = MSG_ATTACKEND;
-      return;
-    }
-    break;
-  case MSG_ATTACKEND:
-    Serial.println("enter MSG_ATTACKEND");
-    vTaskSuspend(hCovid);
-    gEventMsgID = MSG_PRINTMSG;
-    return;
-    break;
-  case MSG_PRINTMSG:
-    Serial.println("enter MSG_PRINTMSG");
-    printStatic("コロナに");
-    delay(1000);
-    printStatic("勝利！！");
-    delay(1000);
-    printScroll("        手洗い、うがい、アルコール消毒で感染拡大を阻止しましょう！！");
-    PrintTime();
-    return;
-    break;
-  case MSG_COVIDRESET:
-    Serial.println("enter MSG_COVIDRESET");
-
-    nAttackCnt = 0;
-
-    if (hCovid != NULL)
-    {
-      vTaskDelete(hCovid);
-      hCovid = NULL;
-    }
-    //Covid Task作成
-    if (xMutex != NULL)
-    {
-      xTaskCreatePinnedToCore(CovidTask, "CovidTask", 4096, NULL, 2, &hCovid, 0);
-    }
-    else
-    {
-      while (1)
-      {
-        Serial.println("rtos mutex create error, stopped");
+  switch(gMsgEventID){
+    case MSG_TIMER_START:
+      if(nCount > 0){
+        sprintf(tmp_str, "      %02d", nCount);
+        sCountDown = tmp_str;
+        printStatic(sCountDown);
         delay(1000);
+        nCount--;
       }
-    }
-    gEventMsgID = MSG_COVIDSTART;
-    return;
+      else{
+        printStatic(">>GO!!<<");
+        //サーボ動作
+        myservo.write(90);
+        delay(100);
+        //イグナイター操作
+        digitalWrite(ledPin, HIGH);
+        delay(50);
+        digitalWrite(ledPin, LOW);
+        //リセット
+        nCount = 10;
+        gMsgEventID = MSG_NOTHING;
+      }
+      return;
     break;
-  case MSG_COVIDSTART:
-    Serial.println("enter MSG_COVIDSTART");
-    vTaskResume(hCovid);
-    //printStatic("Start.  ");
-    break;
-  case MSG_COVIDSTOP:
-    Serial.println("enter MSG_COVIDSTOP");
-    vTaskSuspend(hCovid);
-    //printStatic("Stopped.");
-    break;
-  default:;
+    default:
+      ;
   }
-
-  gEventMsgID = MSG_NOTHING;
 
   delay(1);
 }
-// ヘイ、シリ。システムリセット
-// ヘイ、シリ。コロナウィルスに電撃を加えて
-// ヘイ、シリ。手洗いうがいを世界に広めて
-// ヘイ、シリ。手洗いうがいを世界に広めて
-// ヘイ、シリ。手洗いうがいを世界に広めて
