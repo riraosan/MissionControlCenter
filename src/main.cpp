@@ -23,15 +23,12 @@ SOFTWARE.
 */
 
 #include <Arduino.h>
+#include <WiFi.h>
+#include <WiFiClient.h>
+#include <ESPAsyncWebServer.h>
+#include <SPIFFS.h>
 #include <ESP32_SPIFFS_ShinonomeFNT.h>
 #include <ESP32_SPIFFS_UTF8toSJIS.h>
-#include <time.h>
-#include <stdio.h>
-#include "WiFi.h"
-#include "ESPAsyncWebServer.h"
-#include "SPIFFS.h"
-#include <ESPmDNS.h>
-#include <WiFiClient.h>
 #include <Servo.h>
 
 #define ESP32_AP_MODE false
@@ -636,12 +633,14 @@ void loop()
         printStatic(">>GO!!<<");
         //サーボ動作
         myservo.write(90);
-        delay(100);
+        delay(200);
         //イグナイター操作
         digitalWrite(ledPin, HIGH);
         delay(50);
         digitalWrite(ledPin, LOW);
         //リセット
+        delay(2000);
+        myservo.write(0);
         nCount = 10;
         gMsgEventID = MSG_NOTHING;
       }
