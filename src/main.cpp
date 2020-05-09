@@ -25,13 +25,14 @@ SOFTWARE.
 #include <Arduino.h>
 #include <WiFi.h>
 #include <WiFiClient.h>
+#include <ESPmDNS.h>
 #include <ESPAsyncWebServer.h>
 #include <SPIFFS.h>
 #include <ESP32_SPIFFS_ShinonomeFNT.h>
 #include <ESP32_SPIFFS_UTF8toSJIS.h>
 #include <Servo.h>
 
-#define ESP32_AP_MODE false
+#define ESP32_AP_MODE true
 
 #define JST 3600 * 9
 
@@ -468,11 +469,6 @@ void printScroll(String scrollStr)
   }
 }
 
-void ReleaseRocket(){
-
-
-}
-
 // Replaces placeholder with LED state value
 String processor(const String &var)
 {
@@ -502,7 +498,6 @@ void setup()
   SFR.SPIFFS_Shinonome_Init3F(UTF8SJIS_file, Shino_Half_Font_file, Shino_Zen_Font_file);
 
   myservo.attach(SERVO_NUM);
-  //pinMode(SERVO_NUM, OUTPUT);
   
   // Serial port for debugging purposes
   Serial.begin(115200);
@@ -543,7 +538,7 @@ void setup()
   Serial.println(myIP);
 
   /* Set up mDNS */
-  if (!MDNS.begin("esp32"))
+  if (!MDNS.begin("esp32"))//http://esp32.local/
   {
     Serial.println("Error setting up MDNS responder!");
     while (1)
