@@ -31,6 +31,8 @@ SOFTWARE.
 #include <ESPAsyncWebServer.h>
 #include <SPIFFS.h>
 #include <Servo.h>
+#include <TelnetSpy.h>
+#include <ESP32Ticker.h>
 
 #define ESP32_AP_MODE false
 
@@ -41,6 +43,8 @@ const char *password = "room03601";
 const char *ssid = "Buffalo-G-FAA8";
 const char *password = "34ywce7cffyup";
 #endif
+
+Ticker countDown;
 
 // Set LED GPIO
 const int ledPin = 4;
@@ -54,15 +58,23 @@ static const int SERVO_NUM = 14;
 
 Servo myservo;            
 
-#define MSG_NOTHING     0x00
-#define MSG_TIMER_START 0x01
+TelnetSpy SerialAndTelnet;
+
+#define _SERIAL SerialAndTelnet
+#define Serial SerialAndTelnet
+
+#define MSG_NOTHING           0x00
+#define MSG_TIMER_START       0x01
+#define MSG_TIMER_RESET       0x02
+#define MSG_TIMER_COUNTDOWN   0x03
+#define MSG_SERVO_ON          0x04
+#define MSG_IGNAITER_ON       0x05
 
 int gMsgEventID = MSG_NOTHING;
 
-// Replaces placeholder with LED state value
 String processor(const String &var)
 {
-  Serial.println(var);
+  //Serial.println(var);
   if (var == "STATE"){
     if (digitalRead(ledPin)){
       ledState = "ON";
@@ -70,20 +82,39 @@ String processor(const String &var)
     else{
       ledState = "OFF";
     }
-    Serial.println(ledState);
+    //Serial.println(ledState);
     return ledState;
   }
   return String();
 }
 
+void telnetConnected() {
+  _SERIAL.println("Telnet connection established.");
+}
+
+void telnetDisconnected() {
+  _SERIAL.println("Telnet connection closed.");
+}
+
+void sendCountDownMsg(int state){
+  gMsgEventID = MSG_TIMER_COUNTDOWN;
+}
+
 void setup()
 {
+  SerialAndTelnet.setWelcomeMsg("Welcome to ESP32 WifiTerminal.\r\n");
+  SerialAndTelnet.setCallbackOnConnect(telnetConnected);
+  SerialAndTelnet.setCallbackOnDisconnect(telnetDisconnected);
+  _SERIAL.begin(74880);
+  delay(100); // Wait for serial port
+  _SERIAL.setDebugOutput(false);
+
   delay(1000);
 
   myservo.attach(SERVO_NUM);
   
   // Serial port for debugging purposes
-  Serial.begin(115200);
+  //Serial.begin(115200);
   pinMode(ledPin, OUTPUT);
 
   // Initialize SPIFFS
@@ -128,17 +159,14 @@ void setup()
   // タイマーを開始する
   server.on("/startcountdown", HTTP_GET, [](AsyncWebServerRequest *request) {
     Serial.println("/startcountdown");
-    delay(1000);
-    gMsgEventID = MSG_TIMER_START;
+    //タイマ開始  
     request->send(SPIFFS, "/index.html", String(), false, processor);
   });
 
-  //タイマーをOFFする
-  server.on("/stopcountdown", HTTP_GET, [](AsyncWebServerRequest *request) {
-    Serial.println("/stopcountdown");
-    //リセット
-    myservo.write(0);
-    gMsgEventID = MSG_NOTHING;
+  //タイマーをリセットする
+  server.on("/reset", HTTP_GET, [](AsyncWebServerRequest *request) {
+    Serial.println("/reset");
+    gMsgEventID = MSG_TIMER_RESET;
     request->send(SPIFFS, "/index.html", String(), false, processor);
   });
 
@@ -187,6 +215,7 @@ void setup()
   Serial.println(ArduinoOTA.getHostname());
 
   myservo.write(0);
+
 }
 
 //Event Message Loop
@@ -194,32 +223,47 @@ void loop()
 {
   static int nCount = 10;
 
+  SerialAndTelnet.handle();
+  ArduinoOTA.handle();
+
   switch(gMsgEventID){
     case MSG_TIMER_START:
-      if(nCount > 0){
-        delay(1000);
+        countDown.attach_ms(1000, sendCountDownMsg, 0);
+        gMsgEventID = MSG_NOTHING;
+    break;
+    case MSG_TIMER_COUNTDOWN:
         nCount--;
-      }
-      else{
+        Serial.printf("Timer = %d\r\n", nCount);
+        if(nCount == 0){
+          gMsgEventID = MSG_SERVO_ON;
+        }
+        else{
+          gMsgEventID = MSG_NOTHING;
+        }
+    break;
+    case MSG_SERVO_ON:
         //サーボ動作
         myservo.write(90);
+        Serial.println("Servo ON!");
         delay(200);
+        gMsgEventID = MSG_IGNAITER_ON;
+    break;
+    case MSG_IGNAITER_ON:
         //イグナイター操作
         digitalWrite(ledPin, HIGH);
+        Serial.println("Ignaiter ON!");
         delay(50);
         digitalWrite(ledPin, LOW);
+        gMsgEventID = MSG_TIMER_RESET;
+    break;
+    case MSG_TIMER_RESET:
         //リセット
         delay(2000);
         myservo.write(0);
         nCount = 10;
         gMsgEventID = MSG_NOTHING;
-      }
-      return;
     break;
     default:
-      ;
-  }
-
-  ArduinoOTA.handle();
-
+      ;//MSG_NOTHING
+  } 
 }
