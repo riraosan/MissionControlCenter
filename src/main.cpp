@@ -160,6 +160,7 @@ void setup()
   server.on("/startcountdown", HTTP_GET, [](AsyncWebServerRequest *request) {
     Serial.println("/startcountdown");
     //タイマ開始  
+    gMsgEventID = MSG_TIMER_START;
     request->send(SPIFFS, "/index.html", String(), false, processor);
   });
 
@@ -235,30 +236,30 @@ void loop()
         nCount--;
         Serial.printf("Timer = %d\r\n", nCount);
         if(nCount == 0){
+          countDown.detach();
           gMsgEventID = MSG_SERVO_ON;
         }
         else{
           gMsgEventID = MSG_NOTHING;
         }
     break;
-    case MSG_SERVO_ON:
-        //サーボ動作
-        myservo.write(90);
+    case MSG_SERVO_ON://サーボ動作
         Serial.println("Servo ON!");
+        myservo.write(10);
         delay(200);
         gMsgEventID = MSG_IGNAITER_ON;
     break;
-    case MSG_IGNAITER_ON:
-        //イグナイター操作
-        digitalWrite(ledPin, HIGH);
+    case MSG_IGNAITER_ON://イグナイター発火
         Serial.println("Ignaiter ON!");
+
+        digitalWrite(ledPin, HIGH);
         delay(50);
         digitalWrite(ledPin, LOW);
         gMsgEventID = MSG_TIMER_RESET;
     break;
-    case MSG_TIMER_RESET:
-        //リセット
-        delay(2000);
+    case MSG_TIMER_RESET://リセット
+        Serial.println("Reset");
+        countDown.detach();
         myservo.write(0);
         nCount = 10;
         gMsgEventID = MSG_NOTHING;
