@@ -24,15 +24,24 @@ SOFTWARE.
 
 #include <Arduino.h>
 #include <WiFi.h>
-#include <WiFiClient.h>
-#include <ESPmDNS.h>
 #include <WiFiUdp.h>
+#include <WiFiClient.h>
+//#include <ESPmDNS.h>
+
+#include <ArduinoMDNS.h>
+//#include <EthernetUtil.h>
+//#include <MDNS.h>
+
+
 #include <ArduinoOTA.h>
 #include <ESPAsyncWebServer.h>
-#include <SPIFFS.h>
+//#include <SPIFFS.h>
+//#include <LittleFS.h>
 #include <Servo.h>
 #include <TelnetSpy.h>
-#include <ESP32Ticker.h>
+//#include <ESP32Ticker.h>
+#include <Ticker.h>
+
 
 #define ESP32_AP_MODE false
 
@@ -118,7 +127,7 @@ void setup()
   pinMode(ledPin, OUTPUT);
 
   // Initialize SPIFFS
-  if (!SPIFFS.begin(true))
+  if (!LittleFS.begin(true))
   {
     Serial.println("An Error has occurred while mounting SPIFFS");
     return;
@@ -147,27 +156,27 @@ void setup()
   // Route for root / web page
   server.on("/", HTTP_GET, [](AsyncWebServerRequest *request) {
     Serial.println("Route for root / web page");
-    request->send(SPIFFS, "/index.html", String(), false, processor);
+    request->send(LittleFS, "/index.html", String(), false, processor);
   });
 
   // Route to load style.css file
   server.on("/style.css", HTTP_GET, [](AsyncWebServerRequest *request) {
     Serial.println("Route to load style.css file");
-    request->send(SPIFFS, "/style.css", "text/css");
+    request->send(LittleFS, "/style.css", "text/css");
   });
 
   // タイマーを開始する
   server.on("/startcountdown", HTTP_GET, [](AsyncWebServerRequest *request) {
     Serial.println("/startcountdown");
     //タイマ開始  
-    request->send(SPIFFS, "/index.html", String(), false, processor);
+    request->send(LittleFS, "/index.html", String(), false, processor);
   });
 
   //タイマーをリセットする
   server.on("/reset", HTTP_GET, [](AsyncWebServerRequest *request) {
     Serial.println("/reset");
     gMsgEventID = MSG_TIMER_RESET;
-    request->send(SPIFFS, "/index.html", String(), false, processor);
+    request->send(LittleFS, "/index.html", String(), false, processor);
   });
 
   //Webサーバー開始
