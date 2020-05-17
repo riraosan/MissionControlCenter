@@ -22,26 +22,25 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 */
 
-#include <Arduino.h>
-#include <WiFi.h>
-#include <WiFiUdp.h>
-#include <WiFiClient.h>
-//#include <ESPmDNS.h>
-
-#include <ArduinoMDNS.h>
-//#include <EthernetUtil.h>
-//#include <MDNS.h>
-
-
 #include <ArduinoOTA.h>
+#ifdef ESP32
+  #include <FS.h>
+  #include <SPIFFS.h>
+  #include <WiFi.h>
+  #include <AsyncTCP.h>
+  #include <ESP32Ticker.h>
+  #define HOSTNAME "esp32"
+#elif defined(ESP8266)
+  #include <ESP8266WiFi.h>
+  #include <ESPAsyncTCP.h>
+  #include <ESP8266mDNS.h>
+  #include <Ticker.h>
+  #define HOSTNAME "esp8266"
+#endif
 #include <ESPAsyncWebServer.h>
-//#include <SPIFFS.h>
-//#include <LittleFS.h>
-#include <Servo.h>
+#include <SPIFFSEditor.h>
 #include <TelnetSpy.h>
-//#include <ESP32Ticker.h>
-#include <Ticker.h>
-
+#include <Servo.h>
 
 #define ESP32_AP_MODE false
 
@@ -123,20 +122,19 @@ void setup()
   myservo.attach(SERVO_NUM);
   
   // Serial port for debugging purposes
-  //Serial.begin(115200);
+  Serial.begin(74880);
   pinMode(ledPin, OUTPUT);
 
-  // Initialize SPIFFS
-  if (!LittleFS.begin(true))
+  // Initialize LittleFS
+  if (!SPIFFS.begin())
   {
-    Serial.println("An Error has occurred while mounting SPIFFS");
+    Serial.println("An Error has occurred while mounting LittleFS");
     return;
   }
 
-
 #if (ESP32_AP_MODE == false)
   // Connect to Wi-Fi
-  ArduinoOTA.setHostname("esp32");
+  ArduinoOTA.setHostname(HOSTNAME);
   WiFi.mode(WIFI_STA);
   WiFi.begin(ssid, password);
   while (WiFi.waitForConnectResult() != WL_CONNECTED) {
@@ -156,13 +154,13 @@ void setup()
   // Route for root / web page
   server.on("/", HTTP_GET, [](AsyncWebServerRequest *request) {
     Serial.println("Route for root / web page");
-    request->send(LittleFS, "/index.html", String(), false, processor);
+    request->send(SPIFFS, "/index.html", String(), false, processor);
   });
 
   // Route to load style.css file
   server.on("/style.css", HTTP_GET, [](AsyncWebServerRequest *request) {
     Serial.println("Route to load style.css file");
-    request->send(LittleFS, "/style.css", "text/css");
+    request->send(SPIFFS, "/style.css", "text/css");
   });
 
   // タイマーを開始する
@@ -170,44 +168,47 @@ void setup()
     Serial.println("/startcountdown");
     //タイマ開始  
     gMsgEventID = MSG_TIMER_START;
-    request->send(LittleFS, "/index.html", String(), false, processor);
+    request->send(SPIFFS, "/index.html", String(), false, processor);
   });
 
   //タイマーをリセットする
   server.on("/reset", HTTP_GET, [](AsyncWebServerRequest *request) {
     Serial.println("/reset");
     gMsgEventID = MSG_TIMER_RESET;
-    request->send(LittleFS, "/index.html", String(), false, processor);
+    request->send(SPIFFS, "/index.html", String(), false, processor);
   });
 
   //Webサーバー開始
   server.begin();
 
-  ArduinoOTA
-    .onStart([]() {
-      String type;
-      if (ArduinoOTA.getCommand() == U_FLASH)
-        type = "sketch";
-      else // U_SPIFFS
-        type = "filesystem";
 
-      // NOTE: if updating SPIFFS this would be the place to unmount SPIFFS using SPIFFS.end()
-      Serial.println("Start updating " + type);
-    })
-    .onEnd([]() {
-      Serial.println("\nEnd");
-    })
-    .onProgress([](unsigned int progress, unsigned int total) {
-      Serial.printf("Progress: %u%%\r", (progress / (total / 100)));
-    })
-    .onError([](ota_error_t error) {
-      Serial.printf("Error[%u]: ", error);
-      if (error == OTA_AUTH_ERROR) Serial.println("Auth Failed");
-      else if (error == OTA_BEGIN_ERROR) Serial.println("Begin Failed");
-      else if (error == OTA_CONNECT_ERROR) Serial.println("Connect Failed");
-      else if (error == OTA_RECEIVE_ERROR) Serial.println("Receive Failed");
-      else if (error == OTA_END_ERROR) Serial.println("End Failed");
-    });
+  ArduinoOTA.onStart([]() {
+    String type;
+    if (ArduinoOTA.getCommand() == U_FLASH)
+      type = "sketch";
+    else // U_SPIFFS
+      type = "filesystem";
+
+    // NOTE: if updating SPIFFS this would be the place to unmount SPIFFS using SPIFFS.end()
+    Serial.println("Start updating " + type);
+  });
+  
+  ArduinoOTA.onEnd([]() {
+    Serial.println("\nEnd");
+  });
+  
+  ArduinoOTA.onProgress([](unsigned int progress, unsigned int total) {
+    Serial.printf("Progress: %u%%\r", (progress / (total / 100)));
+  });
+  
+  ArduinoOTA.onError([](ota_error_t error) {
+    Serial.printf("Error[%u]: ", error);
+    if (error == OTA_AUTH_ERROR) Serial.println("Auth Failed");
+    else if (error == OTA_BEGIN_ERROR) Serial.println("Begin Failed");
+    else if (error == OTA_CONNECT_ERROR) Serial.println("Connect Failed");
+    else if (error == OTA_RECEIVE_ERROR) Serial.println("Receive Failed");
+    else if (error == OTA_END_ERROR) Serial.println("End Failed");
+  });
 
   ArduinoOTA.begin();
 
