@@ -55,14 +55,13 @@ const char *password = "34ywce7cffyup";
 Ticker countDown;
 
 // Set LED GPIO
-const int ledPin = 4;
+const int ledPin = 5;
 // Stores LED state
 String ledState;
-
 // Create AsyncWebServer object on port 80
 AsyncWebServer server(80);
 
-static const int SERVO_NUM = 14;
+static const int SERVO_NUM = 4;
 
 Servo myservo;            
 
@@ -128,7 +127,7 @@ void setup()
   // Initialize LittleFS
   if (!SPIFFS.begin())
   {
-    Serial.println("An Error has occurred while mounting LittleFS");
+    Serial.println("An Error has occurred while mounting SPIFFS");
     return;
   }
 
