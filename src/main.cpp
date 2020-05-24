@@ -42,9 +42,9 @@ SOFTWARE.
 #include <TelnetSpy.h>
 #include <Servo.h>
 
-#define ESP32_AP_MODE false
+#define ESP_AP_MODE true
 
-#if ESP32_AP_MODE 
+#if ESP_AP_MODE 
 const char *ssid = "ESP32-G-AP";
 const char *password = "room03601";
 #else
@@ -109,31 +109,31 @@ void sendCountDownMsg(int state){
 
 void setup()
 {
-  SerialAndTelnet.setWelcomeMsg("Welcome to ESP32 WifiTerminal.\r\n");
+  //Port Init
+  myservo.attach(SERVO_NUM);
+  myservo.write(0);
+
+  pinMode(ledPin, OUTPUT);
+
+  //Telnet Init
+  SerialAndTelnet.setWelcomeMsg("Welcome to WifiTerminal.\r\n");
   SerialAndTelnet.setCallbackOnConnect(telnetConnected);
   SerialAndTelnet.setCallbackOnDisconnect(telnetDisconnected);
   _SERIAL.begin(74880);
   delay(100); // Wait for serial port
   _SERIAL.setDebugOutput(false);
-
   delay(1000);
 
-  myservo.attach(SERVO_NUM);
-  
-  // Serial port for debugging purposes
-  Serial.begin(74880);
-  pinMode(ledPin, OUTPUT);
-
-  // Initialize LittleFS
+  // Initialize SPIFFS
   if (!SPIFFS.begin())
   {
     Serial.println("An Error has occurred while mounting SPIFFS");
     return;
   }
 
-#if (ESP32_AP_MODE == false)
+
+#if (ESP_AP_MODE == false)
   // Connect to Wi-Fi
-  ArduinoOTA.setHostname(HOSTNAME);
   WiFi.mode(WIFI_STA);
   WiFi.begin(ssid, password);
   while (WiFi.waitForConnectResult() != WL_CONNECTED) {
@@ -144,7 +144,6 @@ void setup()
 #else
   Serial.println();
   Serial.println("Configuring access point...");
-
   //アクセスポイントを起動する
   WiFi.softAP(ssid, password);
   IPAddress myIP = WiFi.softAPIP();
@@ -177,9 +176,10 @@ void setup()
     request->send(SPIFFS, "/index.html", String(), false, processor);
   });
 
+  //ホスト名設定
+  ArduinoOTA.setHostname(HOSTNAME);
   //Webサーバー開始
   server.begin();
-
 
   ArduinoOTA.onStart([]() {
     String type;
@@ -211,7 +211,7 @@ void setup()
 
   ArduinoOTA.begin();
 
-#if (ESP32_AP_MODE == flase)
+#if (ESP_AP_MODE == flase)
   Serial.println("[Client] Mode");
   Serial.println("Web server started.");
   Serial.println(WiFi.localIP().toString());
@@ -223,9 +223,6 @@ void setup()
   
   Serial.print("Hostname: ");
   Serial.println(ArduinoOTA.getHostname());
-
-  myservo.write(0);
-
 }
 
 //Event Message Loop
@@ -246,17 +243,20 @@ void loop()
         Serial.printf("Timer = %d\r\n", nCount);
         if(nCount == 0){
           countDown.detach();
-          gMsgEventID = MSG_SERVO_ON;
+          gMsgEventID = MSG_IGNAITER_ON;
         }
         else{
           gMsgEventID = MSG_NOTHING;
         }
     break;
     case MSG_SERVO_ON://サーボ動作
+        //イグナイター発火より約0.1秒待つ
+        delay(100);
+        
         Serial.println("Servo ON!");
-        myservo.write(10);
-        delay(200);
-        gMsgEventID = MSG_IGNAITER_ON;
+        myservo.write(40);
+        delay(2000);
+        gMsgEventID = MSG_TIMER_RESET;
     break;
     case MSG_IGNAITER_ON://イグナイター発火
         Serial.println("Ignaiter ON!");
@@ -264,7 +264,7 @@ void loop()
         digitalWrite(ledPin, HIGH);
         delay(50);
         digitalWrite(ledPin, LOW);
-        gMsgEventID = MSG_TIMER_RESET;
+        gMsgEventID = MSG_SERVO_ON;
     break;
     case MSG_TIMER_RESET://リセット
         Serial.println("Reset");
