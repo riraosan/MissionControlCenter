@@ -1,15 +1,51 @@
 <!DOCTYPE html>
 <html>
-<head>
-  <title>Mission Control Center</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <link rel="icon" href="data:,">
-  <link rel="stylesheet" type="text/css" href="style.css">
-</head>
-<body>
-  <h1>Mission Control Center</h1>
-  <!-- <p>GPIO state: <strong> %STATE%</strong></p> -->
-  <p><a href="/startcountdown"><button class="button">Start Countdown</button></a></p>
-  <p><a href="/reset"><button class="button button2">Reset</button></a></p>
+  <head>
+    <title>Rocket Controller</title>
+    <link rel="icon" href="./favicon.ico">
+    <link type="text/css" rel="stylesheet" href="./style.css" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">    
+
+    <script type="text/javascript">
+      function ge(s){ return document.getElementById(s);}
+      
+      function PrintMessage(msg){
+        ge("countdown").innerHTML = msg;
+      }
+
+      function startEvents(){
+        var es = new EventSource('/events');
+        es.onopen = function(e) {
+          //addMessage("Events Opened");
+        };
+        es.onerror = function(e) {
+          if (e.target.readyState != EventSource.OPEN) {
+            //addMessage("Events Closed");
+          }
+        };
+
+        es.onmessage = function(e) {
+          PrintMessage(e.data);
+        };
+
+        es.addEventListener('count', function(e) {
+          PrintMessage(e.data);
+        }, false);
+      }
+
+      function onBodyLoad(){
+        startEvents();
+      }
+
+    </script>
+  </head>
+    <body id="body" onload="onBodyLoad()"> 
+    <h1>Rocket Controller</h1>
+    <hr>
+    <p><a href="/startcountdown"><button id="button01" class="button">Start</button></a></p>
+    <p><a href="/reset"><button id="button02" class="button button2">Reset</button></a></p>
+
+    <p><div style="font-size: 240px; font-family:'HiraKakuProN-W6';" id="countdown"></div></p>
+    
 </body>
 </html>

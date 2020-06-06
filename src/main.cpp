@@ -42,15 +42,11 @@ SOFTWARE.
 #include <TelnetSpy.h>
 #include <Servo.h>
 
-#define ESP_AP_MODE true
+const char *ap_ssid       = "ESP32-G-AP";
+const char *ap_password   = "room03601";
 
-#if ESP_AP_MODE 
-const char *ssid = "ESP32-G-AP";
-const char *password = "room03601";
-#else
-const char *ssid = "Buffalo-G-FAA8";
-const char *password = "34ywce7cffyup";
-#endif
+const char *sta_ssid      = "Buffalo-G-FAA8";
+const char *sta_password  = "34ywce7cffyup";
 
 Ticker countDown;
 
@@ -58,8 +54,10 @@ Ticker countDown;
 const int ledPin = 5;
 // Stores LED state
 String ledState;
+
 // Create AsyncWebServer object on port 80
 AsyncWebServer server(80);
+AsyncEventSource events("/events");
 
 static const int SERVO_NUM = 4;
 
@@ -67,7 +65,7 @@ Servo myservo;
 
 TelnetSpy SerialAndTelnet;
 
-#define _SERIAL SerialAndTelnet
+//#define _SERIAL SerialAndTelnet
 #define Serial SerialAndTelnet
 
 #define MSG_NOTHING           0x00
@@ -81,7 +79,6 @@ int gMsgEventID = MSG_NOTHING;
 
 String processor(const String &var)
 {
-  //Serial.println(var);
   if (var == "STATE"){
     if (digitalRead(ledPin)){
       ledState = "ON";
@@ -89,18 +86,17 @@ String processor(const String &var)
     else{
       ledState = "OFF";
     }
-    //Serial.println(ledState);
     return ledState;
   }
   return String();
 }
 
 void telnetConnected() {
-  _SERIAL.println("Telnet connection established.");
+  Serial.println("Telnet connection established.");
 }
 
 void telnetDisconnected() {
-  _SERIAL.println("Telnet connection closed.");
+  Serial.println("Telnet connection closed.");
 }
 
 void sendCountDownMsg(int state){
@@ -111,43 +107,35 @@ void setup()
 {
   //Port Init
   myservo.attach(SERVO_NUM);
-  myservo.write(0);
+  myservo.write(90);
 
   pinMode(ledPin, OUTPUT);
 
   //Telnet Init
-  SerialAndTelnet.setWelcomeMsg("Welcome to WifiTerminal.\r\n");
+  SerialAndTelnet.setWelcomeMsg("Welcome to ESP Terminal.\r\n");
   SerialAndTelnet.setCallbackOnConnect(telnetConnected);
   SerialAndTelnet.setCallbackOnDisconnect(telnetDisconnected);
-  _SERIAL.begin(74880);
+  Serial.begin(74880);
   delay(100); // Wait for serial port
-  _SERIAL.setDebugOutput(false);
+  Serial.setDebugOutput(false);
   delay(1000);
 
-  // Initialize SPIFFS
-  if (!SPIFFS.begin())
-  {
-    Serial.println("An Error has occurred while mounting SPIFFS");
-    return;
-  }
-
-
-#if (ESP_AP_MODE == false)
-  // Connect to Wi-Fi
-  WiFi.mode(WIFI_STA);
-  WiFi.begin(ssid, password);
-  while (WiFi.waitForConnectResult() != WL_CONNECTED) {
-    Serial.println("Connection Failed! Rebooting...");
+  WiFi.mode(WIFI_AP_STA);
+  WiFi.softAP(HOSTNAME);
+  WiFi.begin(sta_ssid, sta_password);
+  if (WiFi.waitForConnectResult() != WL_CONNECTED) {
+    Serial.println("STA: Failed!");
+    Serial.println("[Access Point] Mode");
+    WiFi.disconnect(false);
     delay(5000);
-    ESP.restart();
+    WiFi.begin(ap_ssid, ap_password);
   }
-#else
-  Serial.println();
-  Serial.println("Configuring access point...");
-  //アクセスポイントを起動する
-  WiFi.softAP(ssid, password);
-  IPAddress myIP = WiFi.softAPIP();
-#endif
+  else{
+    Serial.println("STA: Success!");
+    Serial.println("[Client] Mode");
+  }
+
+  Serial.println(WiFi.localIP().toString());
 
   // Route for root / web page
   server.on("/", HTTP_GET, [](AsyncWebServerRequest *request) {
@@ -161,37 +149,27 @@ void setup()
     request->send(SPIFFS, "/style.css", "text/css");
   });
 
-  // タイマーを開始する
+  // Route to load favicon.ico file
+  server.on("/favicon.ico", HTTP_GET, [](AsyncWebServerRequest *request) {
+    Serial.println("Route to load favicon.ico file");
+    request->send(SPIFFS, "/favicon.ico", "icon");
+  });
+
+  //Web API
+  // start timer
   server.on("/startcountdown", HTTP_GET, [](AsyncWebServerRequest *request) {
     Serial.println("/startcountdown");
-    //タイマ開始  
     gMsgEventID = MSG_TIMER_START;
     request->send(SPIFFS, "/index.html", String(), false, processor);
   });
 
-  //タイマーをリセットする
+  // reset timer
   server.on("/reset", HTTP_GET, [](AsyncWebServerRequest *request) {
     Serial.println("/reset");
     gMsgEventID = MSG_TIMER_RESET;
     request->send(SPIFFS, "/index.html", String(), false, processor);
   });
 
-  //ホスト名設定
-  ArduinoOTA.setHostname(HOSTNAME);
-  //Webサーバー開始
-  server.begin();
-
-  ArduinoOTA.onStart([]() {
-    String type;
-    if (ArduinoOTA.getCommand() == U_FLASH)
-      type = "sketch";
-    else // U_SPIFFS
-      type = "filesystem";
-
-    // NOTE: if updating SPIFFS this would be the place to unmount SPIFFS using SPIFFS.end()
-    Serial.println("Start updating " + type);
-  });
-  
   ArduinoOTA.onEnd([]() {
     Serial.println("\nEnd");
   });
@@ -209,25 +187,32 @@ void setup()
     else if (error == OTA_END_ERROR) Serial.println("End Failed");
   });
 
+  ArduinoOTA.setHostname(HOSTNAME);
   ArduinoOTA.begin();
-
-#if (ESP_AP_MODE == flase)
-  Serial.println("[Client] Mode");
-  Serial.println("Web server started.");
-  Serial.println(WiFi.localIP().toString());
-#else
-  Serial.println("[Access Point] Mode");
-  Serial.println("Web server started.");
-  Serial.println(myIP.toString());
-#endif
   
+  // Initialize SPIFFS
+  if (!SPIFFS.begin()){
+    Serial.println("An Error has occurred while mounting SPIFFS");
+    return;
+  }
+
+  events.onConnect([](AsyncEventSourceClient *client){
+    client->send("10", NULL, millis(), 1000);
+  });
+
+  server.addHandler(&events);
+
   Serial.print("Hostname: ");
   Serial.println(ArduinoOTA.getHostname());
+
+  server.begin();
+
 }
 
 //Event Message Loop
 void loop()
 {
+  char p[32] = {0};
   static int nCount = 10;
 
   SerialAndTelnet.handle();
@@ -236,11 +221,18 @@ void loop()
   switch(gMsgEventID){
     case MSG_TIMER_START:
         countDown.attach_ms(1000, sendCountDownMsg, 0);
+
         gMsgEventID = MSG_NOTHING;
     break;
     case MSG_TIMER_COUNTDOWN:
+        
         nCount--;
+        
         Serial.printf("Timer = %d\r\n", nCount);
+
+        sprintf(p, "%d", nCount);
+        events.send(p, "count");
+
         if(nCount == 0){
           countDown.detach();
           gMsgEventID = MSG_IGNAITER_ON;
@@ -249,28 +241,31 @@ void loop()
           gMsgEventID = MSG_NOTHING;
         }
     break;
-    case MSG_SERVO_ON://サーボ動作
-        //イグナイター発火より約0.1秒待つ
-        delay(100);
+    case MSG_SERVO_ON:
+        
+        delay(100);// wait 0.1s from MSG_IGNAITER_ON
         
         Serial.println("Servo ON!");
-        myservo.write(40);
-        delay(2000);
+        myservo.write(148);
+        delay(1500);
+
         gMsgEventID = MSG_TIMER_RESET;
     break;
-    case MSG_IGNAITER_ON://イグナイター発火
+    case MSG_IGNAITER_ON:
         Serial.println("Ignaiter ON!");
 
         digitalWrite(ledPin, HIGH);
         delay(50);
         digitalWrite(ledPin, LOW);
+
         gMsgEventID = MSG_SERVO_ON;
     break;
-    case MSG_TIMER_RESET://リセット
+    case MSG_TIMER_RESET:
         Serial.println("Reset");
-        countDown.detach();
-        myservo.write(0);
+        countDown.detach();        
+        myservo.write(90);
         nCount = 10;
+
         gMsgEventID = MSG_NOTHING;
     break;
     default:
