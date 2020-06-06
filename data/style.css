@@ -3,9 +3,10 @@ html {
   display: inline-block;
   margin: 0px auto;
   text-align: center;
+  background-color: #000000;
 }
 h1{
-  color: #0F3376;
+  color: rgba(62, 119, 224, 0.877);
   padding: 2vh;
 }
 p{
