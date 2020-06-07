@@ -28,6 +28,7 @@ SOFTWARE.
   #include <SPIFFS.h>
   #include <WiFi.h>
   #include <AsyncTCP.h>
+  #include <ESPmDNS.h>
   #include <ESP32Ticker.h>
   #define HOSTNAME "esp32"
 #elif defined(ESP8266)
@@ -121,19 +122,27 @@ void setup()
   delay(1000);
 
   WiFi.mode(WIFI_AP_STA);
-  WiFi.softAP(HOSTNAME);
   WiFi.begin(sta_ssid, sta_password);
+
   if (WiFi.waitForConnectResult() != WL_CONNECTED) {
     Serial.println("STA: Failed!");
     Serial.println("[Access Point] Mode");
     WiFi.disconnect(false);
     delay(5000);
-    WiFi.begin(ap_ssid, ap_password);
+    WiFi.softAP(ap_ssid, ap_password);
   }
   else{
     Serial.println("STA: Success!");
     Serial.println("[Client] Mode");
   }
+
+  if (!MDNS.begin(HOSTNAME)){
+    Serial.println("Error setting up MDNS responder!");
+    while (1){
+      delay(1000);
+    }
+  }
+  Serial.println("mDNS responder started");
 
   Serial.println(WiFi.localIP().toString());
 
