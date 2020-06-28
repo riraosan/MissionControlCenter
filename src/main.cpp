@@ -31,20 +31,25 @@ SOFTWARE.
   #include <ESPmDNS.h>
   #include <ESP32Ticker.h>
   #define HOSTNAME "esp32"
+
+  const char *ap_ssid       = "ESP32-G-AP";
+  const char *ap_password   = "room03601";
+
 #elif defined(ESP8266)
   #include <ESP8266WiFi.h>
   #include <ESPAsyncTCP.h>
   #include <ESP8266mDNS.h>
   #include <Ticker.h>
   #define HOSTNAME "esp8266"
+
+  const char *ap_ssid       = "ESP8266-G-AP";
+  const char *ap_password   = "room03601";
+
 #endif
 #include <ESPAsyncWebServer.h>
 #include <SPIFFSEditor.h>
 #include <TelnetSpy.h>
 #include <Servo.h>
-
-const char *ap_ssid       = "ESP32-G-AP";
-const char *ap_password   = "room03601";
 
 const char *sta_ssid      = "Buffalo-G-FAA8";
 const char *sta_password  = "34ywce7cffyup";
@@ -80,15 +85,7 @@ int gMsgEventID = MSG_NOTHING;
 
 String processor(const String &var)
 {
-  if (var == "STATE"){
-    if (digitalRead(ledPin)){
-      ledState = "ON";
-    }
-    else{
-      ledState = "OFF";
-    }
-    return ledState;
-  }
+  //nothing
   return String();
 }
 
@@ -104,6 +101,35 @@ void sendCountDownMsg(int state){
   gMsgEventID = MSG_TIMER_COUNTDOWN;
 }
 
+void onRequest(AsyncWebServerRequest *request){
+  Serial.println("onRequest() Handle Unknown Request");
+  //Handle Unknown Request
+  request->send(404);
+}
+
+void onUpload(AsyncWebServerRequest *request, String filename, size_t index, uint8_t *data, size_t len, bool final){
+  Serial.println("onUpload() Handle upload");
+  //Handle upload
+}
+
+void onBody(AsyncWebServerRequest *request, uint8_t *data, size_t len, size_t index, size_t total){
+  Serial.println("onBody()");
+
+  //Handle body
+  if(!index){
+    //Serial.printf("BodyStart: %u B\n", total);
+  }
+
+  for(size_t i = 0; i < len; i++){
+    Serial.write(data[i]);
+  }
+
+  if(index + len == total){
+    //Serial.printf("BodyEnd: %u B\n", total);
+  }
+
+}
+
 void setup()
 {
   //Port Init
@@ -111,6 +137,7 @@ void setup()
   myservo.write(90);
 
   pinMode(ledPin, OUTPUT);
+  digitalWrite(ledPin, LOW);
 
   //Telnet Init
   SerialAndTelnet.setWelcomeMsg("Welcome to ESP Terminal.\r\n");
@@ -146,12 +173,6 @@ void setup()
 
   Serial.println(WiFi.localIP().toString());
 
-  // Route for root / web page
-  server.on("/", HTTP_GET, [](AsyncWebServerRequest *request) {
-    Serial.println("Route for root / web page");
-    request->send(SPIFFS, "/index.html", String(), false, processor);
-  });
-
   // Route to load style.css file
   server.on("/style.css", HTTP_GET, [](AsyncWebServerRequest *request) {
     Serial.println("Route to load style.css file");
@@ -164,15 +185,35 @@ void setup()
     request->send(SPIFFS, "/favicon.ico", "icon");
   });
 
-  //Web API
-  // start timer
-  server.on("/startcountdown", HTTP_GET, [](AsyncWebServerRequest *request) {
-    Serial.println("/startcountdown");
+  // Route for root / web page
+  server.on("/", HTTP_GET, [](AsyncWebServerRequest *request) {
+    Serial.println("[HTTP_GET] /");
+    request->send(SPIFFS, "/index.html", String(), false, processor);
+  });
+
+  server.on("/", HTTP_POST, [](AsyncWebServerRequest *request) {
+    Serial.println("[HTTP_POST] /");
+  }, NULL, onBody);
+
+  // Route for /settings web page
+  server.on("/settings", HTTP_GET, [](AsyncWebServerRequest *request) {
+    Serial.println("[HTTP_GET] /settings");
+    request->send(SPIFFS, "/settings.html", String(), false, processor);
+  });
+
+  server.on("/settings", HTTP_POST, [](AsyncWebServerRequest *request) {
+    Serial.println("[HTTP_POST] /settings");
+  }, NULL, onBody);
+
+  //REST API
+  //Start timer
+  server.on("/start", HTTP_GET, [](AsyncWebServerRequest *request) {
+    Serial.println("/start");
     gMsgEventID = MSG_TIMER_START;
     request->send(SPIFFS, "/index.html", String(), false, processor);
   });
 
-  // reset timer
+  //Reset timer
   server.on("/reset", HTTP_GET, [](AsyncWebServerRequest *request) {
     Serial.println("/reset");
     gMsgEventID = MSG_TIMER_RESET;
@@ -200,6 +241,7 @@ void setup()
   ArduinoOTA.begin();
   
   // Initialize SPIFFS
+  Serial.println("Mounting FS...");
   if (!SPIFFS.begin()){
     Serial.println("An Error has occurred while mounting SPIFFS");
     return;
@@ -211,10 +253,18 @@ void setup()
 
   server.addHandler(&events);
 
+  // Catch-All Handlers
+  // Any request that can not find a Handler that canHandle it
+  // ends in the callbacks below.
+  server.onNotFound(onRequest);
+  server.onFileUpload(onUpload);
+  //server.onRequestBody(onBody);
+
   Serial.print("Hostname: ");
-  Serial.println(ArduinoOTA.getHostname());
+  Serial.println(ArduinoOTA.getHostname() + ".local");
 
   server.begin();
+  Serial.println("Server Started");
 
 }
 
@@ -252,7 +302,7 @@ void loop()
     break;
     case MSG_SERVO_ON:
         
-        delay(100);// wait 0.1s from MSG_IGNAITER_ON
+        delay(50);// wait from MSG_IGNAITER_ON
         
         Serial.println("Servo ON!");
         myservo.write(148);
@@ -264,9 +314,10 @@ void loop()
         Serial.println("Ignaiter ON!");
 
         digitalWrite(ledPin, HIGH);
-        delay(50);
+        delay(100);
+        //delay(50);
         digitalWrite(ledPin, LOW);
-
+        Serial.println("Ignaiter OFF!");
         gMsgEventID = MSG_SERVO_ON;
     break;
     case MSG_TIMER_RESET:
