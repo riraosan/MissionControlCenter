@@ -30,7 +30,7 @@
           $(function(){
 
             $("#SUBMIT_SETTING").click( function(){
-                var url = "http://esp8266.local/settings";
+                var url = "http://esp8266.local/";
     
                 var JSONdata = {
                     SPERK_TIME: parseInt($("#SPERK_TIME").val()),
@@ -47,18 +47,15 @@
     <h1>Settings</h1>
     <hr>
     <p>
-      <form>
       <table>
         <tr>
-          <td>放電時間(ms)：</td><td><input type="text" id="SPERK_TIME" name="SPERK_TIME" value="0" /></td>
+          <td>放電時間(ms)：</td><td><input type="number" id="SPERK_TIME" name="SPERK_TIME" value="50" /></td>
         </tr>
         <tr>
-          <td>リリース時間(ms)：</td><td><input type="text" id="RELEASE_TIME" name="RELEASE_TIME" value="0" /></td>
+          <td>リリース時間(ms)：</td><td><input type="number" id="RELEASE_TIME" name="RELEASE_TIME" value="10" /></td>
         </tr>
       </table>
-      <button type="submit" name="submit" id="SUBMIT_SETTING" class="button button3">設定</button>
-      <button type="reset" name="reset" id="RESET_SETTING" class="button button3">リセット</button>
-    </form>
+      <a href="/"><button id="SUBMIT_SETTING" class="button button3">設定</button></a>
     </p>    
 </body>
 </html>

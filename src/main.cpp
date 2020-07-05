@@ -114,7 +114,9 @@ void onUpload(AsyncWebServerRequest *request, String filename, size_t index, uin
 
 void onBody(AsyncWebServerRequest *request, uint8_t *data, size_t len, size_t index, size_t total){
   Serial.println("onBody()");
-
+//ArduinoJson をつかってJSONボディをパースする。
+//各パラメータをグローバル変数に格納する。
+//メッセージを投げる。
   //Handle body
   if(!index){
     //Serial.printf("BodyStart: %u B\n", total);
@@ -122,7 +124,12 @@ void onBody(AsyncWebServerRequest *request, uint8_t *data, size_t len, size_t in
 
   for(size_t i = 0; i < len; i++){
     Serial.write(data[i]);
+    //ストリングクラスに格納
   }
+
+  //Jsonperserでパース
+  //値をセット
+  //メッセージを投げる
 
   if(index + len == total){
     //Serial.printf("BodyEnd: %u B\n", total);
@@ -193,6 +200,7 @@ void setup()
 
   server.on("/", HTTP_POST, [](AsyncWebServerRequest *request) {
     Serial.println("[HTTP_POST] /");
+    request->send(SPIFFS, "/index.html", String(), false, processor);
   }, NULL, onBody);
 
   // Route for /settings web page
