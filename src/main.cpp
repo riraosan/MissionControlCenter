@@ -31,6 +31,7 @@ SOFTWARE.
   #include <ESPmDNS.h>
   #include <ESP32Ticker.h>
   #define HOSTNAME "esp32"
+  #define MONITOR_SPEED 115200
 
   const char *ap_ssid       = "ESP32-G-AP";
   const char *ap_password   = "room03601";
@@ -41,6 +42,7 @@ SOFTWARE.
   #include <ESP8266mDNS.h>
   #include <Ticker.h>
   #define HOSTNAME "esp8266"
+  #define MONITOR_SPEED 74880
 
   const char *ap_ssid       = "ESP8266-G-AP";
   const char *ap_password   = "room03601";
@@ -150,7 +152,7 @@ void setup()
   SerialAndTelnet.setWelcomeMsg("Welcome to ESP Terminal.\r\n");
   SerialAndTelnet.setCallbackOnConnect(telnetConnected);
   SerialAndTelnet.setCallbackOnDisconnect(telnetDisconnected);
-  Serial.begin(74880);
+  Serial.begin(MONITOR_SPEED);
   delay(100); // Wait for serial port
   Serial.setDebugOutput(false);
   delay(1000);
@@ -322,8 +324,8 @@ void loop()
         Serial.println("Ignaiter ON!");
 
         digitalWrite(ledPin, HIGH);
-        delay(100);
-        //delay(50);
+        //delay(100);
+        delay(50);
         digitalWrite(ledPin, LOW);
         Serial.println("Ignaiter OFF!");
         gMsgEventID = MSG_SERVO_ON;
