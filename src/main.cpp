@@ -21,8 +21,8 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 */
-
 #include <ArduinoOTA.h>
+#include <ArduinoJson.h>
 #ifdef ESP32
   #include <FS.h>
   #include <SPIFFS.h>
@@ -83,7 +83,10 @@ TelnetSpy SerialAndTelnet;
 #define MSG_SERVO_ON          0x04
 #define MSG_IGNAITER_ON       0x05
 
-int gMsgEventID = MSG_NOTHING;
+int gMsgEventID   = MSG_NOTHING;
+
+int gSPERK_TIME    = 50;//default
+int gRELEASE_TIME  = 10;//default
 
 String processor(const String &var)
 {
@@ -116,26 +119,23 @@ void onUpload(AsyncWebServerRequest *request, String filename, size_t index, uin
 
 void onBody(AsyncWebServerRequest *request, uint8_t *data, size_t len, size_t index, size_t total){
   Serial.println("onBody()");
-//ArduinoJson をつかってJSONボディをパースする。
-//各パラメータをグローバル変数に格納する。
-//メッセージを投げる。
-  //Handle body
-  if(!index){
-    //Serial.printf("BodyStart: %u B\n", total);
-  }
+  String jsonBody;
+
+  const size_t capacity = JSON_OBJECT_SIZE(2) + 30;
+  DynamicJsonDocument doc(capacity);
 
   for(size_t i = 0; i < len; i++){
-    Serial.write(data[i]);
-    //ストリングクラスに格納
+    jsonBody += (char)data[i];
   }
 
-  //Jsonperserでパース
-  //値をセット
-  //メッセージを投げる
+  //Serial.println(jsonBody);
 
-  if(index + len == total){
-    //Serial.printf("BodyEnd: %u B\n", total);
-  }
+  deserializeJson(doc, jsonBody);
+
+  gSPERK_TIME = doc["SPERK_TIME"];
+  gRELEASE_TIME = doc["RELEASE_TIME"];
+
+  Serial.printf("SPERK_TIME = %d RELEASE_TIME = %d\n", gSPERK_TIME, gRELEASE_TIME); 
 
 }
 
@@ -166,10 +166,12 @@ void setup()
     WiFi.disconnect(false);
     delay(5000);
     WiFi.softAP(ap_ssid, ap_password);
+    Serial.println(WiFi.softAPIP().toString());
   }
   else{
     Serial.println("STA: Success!");
     Serial.println("[Client] Mode");
+    Serial.println(WiFi.localIP().toString());
   }
 
   if (!MDNS.begin(HOSTNAME)){
@@ -179,8 +181,6 @@ void setup()
     }
   }
   Serial.println("mDNS responder started");
-
-  Serial.println(WiFi.localIP().toString());
 
   // Route to load style.css file
   server.on("/style.css", HTTP_GET, [](AsyncWebServerRequest *request) {
@@ -311,8 +311,8 @@ void loop()
         }
     break;
     case MSG_SERVO_ON:
-        
-        delay(50);// wait from MSG_IGNAITER_ON
+        Serial.printf("RELEASE_TIME = %d[ms]\n", gRELEASE_TIME);        
+        delay(gRELEASE_TIME);// wait from MSG_IGNAITER_ON
         
         Serial.println("Servo ON!");
         myservo.write(148);
@@ -321,11 +321,12 @@ void loop()
         gMsgEventID = MSG_TIMER_RESET;
     break;
     case MSG_IGNAITER_ON:
+
+        Serial.printf("SPERK_TIME = %d[ms]\n", gSPERK_TIME);
         Serial.println("Ignaiter ON!");
 
         digitalWrite(ledPin, HIGH);
-        //delay(100);
-        delay(50);
+        delay(gSPERK_TIME);
         digitalWrite(ledPin, LOW);
         Serial.println("Ignaiter OFF!");
         gMsgEventID = MSG_SERVO_ON;
