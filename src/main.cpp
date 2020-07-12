@@ -48,6 +48,7 @@ SOFTWARE.
   const char *ap_password   = "room03601";
 
 #endif
+
 #include <ESPAsyncWebServer.h>
 #include <SPIFFSEditor.h>
 #include <TelnetSpy.h>
@@ -76,22 +77,31 @@ TelnetSpy SerialAndTelnet;
 //#define _SERIAL SerialAndTelnet
 #define Serial SerialAndTelnet
 
-#define MSG_NOTHING           0x00
-#define MSG_TIMER_START       0x01
-#define MSG_TIMER_RESET       0x02
-#define MSG_TIMER_COUNTDOWN   0x03
-#define MSG_SERVO_ON          0x04
-#define MSG_IGNAITER_ON       0x05
+#define MSG_NOTHING            0x00
+#define MSG_TIMER_START        0x01
+#define MSG_TIMER_RESET        0x02
+#define MSG_TIMER_COUNTDOWN    0x03
+#define MSG_SERVO_ON           0x04
+#define MSG_IGNAITER_ON        0x05
 
 int gMsgEventID   = MSG_NOTHING;
 
 int gSPERK_TIME    = 50;//default
 int gRELEASE_TIME  = 10;//default
 
-String processor(const String &var)
-{
-  //nothing
-  return String();
+String processor(const String &var) {
+  Serial.println("processor()");
+
+  if(var == "SPERK_TIME"){
+    String value = String(gSPERK_TIME);
+    return value;
+  }
+  else if(var == "RELEASE_TIME"){
+    String value = String(gRELEASE_TIME);
+    return value;
+  }
+
+  return "0";
 }
 
 void telnetConnected() {
@@ -149,7 +159,7 @@ void setup()
   digitalWrite(ledPin, LOW);
 
   //Telnet Init
-  SerialAndTelnet.setWelcomeMsg("Welcome to ESP Terminal.\r\n");
+  SerialAndTelnet.setWelcomeMsg("Welcome to ESP Terminal.\n");
   SerialAndTelnet.setCallbackOnConnect(telnetConnected);
   SerialAndTelnet.setCallbackOnDisconnect(telnetDisconnected);
   Serial.begin(MONITOR_SPEED);
@@ -170,7 +180,7 @@ void setup()
   }
   else{
     Serial.println("STA: Success!");
-    Serial.println("[Client] Mode");
+    Serial.println("[STA] Mode");
     Serial.println(WiFi.localIP().toString());
   }
 
@@ -186,6 +196,11 @@ void setup()
   server.on("/style.css", HTTP_GET, [](AsyncWebServerRequest *request) {
     Serial.println("Route to load style.css file");
     request->send(SPIFFS, "/style.css", "text/css");
+  });
+
+  server.on("/jquery-3.5.1.slim.min.js", HTTP_GET, [](AsyncWebServerRequest *request) {
+    Serial.println("Route to load jquery-3.5.1.slim.min.js file");
+    request->send(SPIFFS, "/jquery-3.5.1.slim.min.js", "text/javascript");
   });
 
   // Route to load favicon.ico file
@@ -314,9 +329,9 @@ void loop()
         Serial.printf("RELEASE_TIME = %d[ms]\n", gRELEASE_TIME);        
         delay(gRELEASE_TIME);// wait from MSG_IGNAITER_ON
         
-        Serial.println("Servo ON!");
-        myservo.write(148);
-        delay(1500);
+        //Serial.println("Servo ON!");
+        myservo.write(150);
+        delay(1000);
 
         gMsgEventID = MSG_TIMER_RESET;
     break;
@@ -337,6 +352,8 @@ void loop()
         myservo.write(90);
         nCount = 10;
 
+        sprintf(p, "%d", nCount);
+        events.send(p, "count");
         gMsgEventID = MSG_NOTHING;
     break;
     default:
