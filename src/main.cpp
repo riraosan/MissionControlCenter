@@ -24,8 +24,7 @@ SOFTWARE.
 #include <ArduinoOTA.h>
 #include <ArduinoJson.h>
 #ifdef ESP32
-  #include <FS.h>
-  //#include <SPIFFS.h>
+  #include <LittleFS.h>
   #include <WiFi.h>
   #include <AsyncTCP.h>
   #include <ESPmDNS.h>
@@ -37,10 +36,9 @@ SOFTWARE.
   const char *ap_password   = "room03601";
 
 #elif defined(ESP8266)
-  #include <FS.h>
-  //#include <LittleFS.h>
+  #include <LittleFS.h>
   #include <ESP8266WiFi.h>
-  #include <ESPAsyncTCP.h>
+  //#include <ESPAsyncTCP.h>
   #include <ESP8266mDNS.h>
   #include <Ticker.h>
   #define HOSTNAME "esp8266"
@@ -197,35 +195,35 @@ void setup()
   // Route to load style.css file
   server.on("/style.css", HTTP_GET, [](AsyncWebServerRequest *request) {
     Serial.println("Route to load style.css file");
-    request->send(SPIFFS, "/style.css", "text/css");
+    request->send(LittleFS, "/style.css", "text/css");
   });
 
   server.on("/jquery-2.2.4.min.js", HTTP_GET, [](AsyncWebServerRequest *request) {
     Serial.println("Route to load jquery-2.2.4.min.js file");
-    request->send(SPIFFS, "/jquery-2.2.4.min.js", "text/javascript");
+    request->send(LittleFS, "/jquery-2.2.4.min.js", "text/javascript");
   });
 
   // Route to load favicon.ico file
   server.on("/favicon.ico", HTTP_GET, [](AsyncWebServerRequest *request) {
     Serial.println("Route to load favicon.ico file");
-    request->send(SPIFFS, "/favicon.ico", "icon");
+    request->send(LittleFS, "/favicon.ico", "icon");
   });
 
   // Route for root / web page
   server.on("/", HTTP_GET, [](AsyncWebServerRequest *request) {
     Serial.println("[HTTP_GET] /");
-    request->send(SPIFFS, "/index.html", String(), false, processor);
+    request->send(LittleFS, "/index.html", String(), false, processor);
   });
 
   server.on("/", HTTP_POST, [](AsyncWebServerRequest *request) {
     Serial.println("[HTTP_POST] /");
-    request->send(SPIFFS, "/index.html", String(), false, processor);
+    request->send(LittleFS, "/index.html", String(), false, processor);
   }, NULL, onBody);
 
   // Route for /settings web page
   server.on("/settings", HTTP_GET, [](AsyncWebServerRequest *request) {
     Serial.println("[HTTP_GET] /settings");
-    request->send(SPIFFS, "/settings.html", String(), false, processor);
+    request->send(LittleFS, "/settings.html", String(), false, processor);
   });
 
   server.on("/settings", HTTP_POST, [](AsyncWebServerRequest *request) {
@@ -237,14 +235,14 @@ void setup()
   server.on("/start", HTTP_GET, [](AsyncWebServerRequest *request) {
     Serial.println("/start");
     gMsgEventID = MSG_TIMER_START;
-    request->send(SPIFFS, "/index.html", String(), false, processor);
+    request->send(LittleFS, "/index.html", String(), false, processor);
   });
 
   //Reset timer
   server.on("/reset", HTTP_GET, [](AsyncWebServerRequest *request) {
     Serial.println("/reset");
     gMsgEventID = MSG_TIMER_RESET;
-    request->send(SPIFFS, "/index.html", String(), false, processor);
+    request->send(LittleFS, "/index.html", String(), false, processor);
   });
 
   ArduinoOTA.onEnd([]() {
@@ -269,7 +267,7 @@ void setup()
   
   // Initialize SPIFFS
   Serial.println("Mounting FS...");
-  if (!SPIFFS.begin()){
+  if (!LittleFS.begin()){
     Serial.println("An Error has occurred while mounting LittleFS");
     return;
   }
