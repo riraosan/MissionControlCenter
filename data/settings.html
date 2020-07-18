@@ -2,14 +2,14 @@
 <html>
   <head>
     <title>Settings</title>
-    <link rel="icon" href="./favicon.ico">
-    <link type="text/css" rel="stylesheet" href="./style.css" />
+    <link rel="icon" href="favicon.ico">
+    <link type="text/css" rel="stylesheet" href="style.css" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
     <meta http-equiv="content-type" charset="utf-8">    
 
-    <script type="text/javascript" src="./jquery-3.5.1.slim.min.js"></script>
+    <script src="jquery-2.2.4.min.js"></script>
 
-    <script type="text/javascript">
+    <script>
 
       function doPost(url, data) {
         console.log(url);
@@ -26,27 +26,24 @@
         };
         xhr.send(data);
       }
+      
+      $(document).on('click touchstart', '#SUBMIT_SETTING', function(){
+      
+        var url = "http://"+document.location.host+"/";
+        var JSONdata = {
+          SPERK_TIME: parseInt($("#SPERK_TIME").val()),
+          RELEASE_TIME: parseInt($("#RELEASE_TIME").val())      
+        };
 
-      $(function(){
-
-        $("#SUBMIT_SETTING").click( function(){
-          var url = "http://"+document.location.host+"/";
-          var JSONdata = {
-            SPERK_TIME: parseInt($("#SPERK_TIME").val()),
-            RELEASE_TIME: parseInt($("#RELEASE_TIME").val())      
-          };
-
-          doPost(url, JSON.stringify(JSONdata));
-        })
+        doPost(url, JSON.stringify(JSONdata));
+      
       })
-
     </script>
 
     </head>
     <body id="body"> 
     <h1>Settings</h1>
     <hr>
-    <p>
       <table>
         <tr>
           <td>放電時間(ms)：</td><td><input type="number" id="SPERK_TIME" name="SPERK_TIME" value="%SPERK_TIME%" /></td>
@@ -56,6 +53,5 @@
         </tr>
       </table>
       <a href="/"><button id="SUBMIT_SETTING" class="button button3">設定</button></a>
-    </p>    
-</body>
+    </body>
 </html>

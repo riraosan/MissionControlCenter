@@ -25,7 +25,7 @@ SOFTWARE.
 #include <ArduinoJson.h>
 #ifdef ESP32
   #include <FS.h>
-  #include <SPIFFS.h>
+  //#include <SPIFFS.h>
   #include <WiFi.h>
   #include <AsyncTCP.h>
   #include <ESPmDNS.h>
@@ -37,6 +37,8 @@ SOFTWARE.
   const char *ap_password   = "room03601";
 
 #elif defined(ESP8266)
+  #include <FS.h>
+  //#include <LittleFS.h>
   #include <ESP8266WiFi.h>
   #include <ESPAsyncTCP.h>
   #include <ESP8266mDNS.h>
@@ -198,9 +200,9 @@ void setup()
     request->send(SPIFFS, "/style.css", "text/css");
   });
 
-  server.on("/jquery-3.5.1.slim.min.js", HTTP_GET, [](AsyncWebServerRequest *request) {
-    Serial.println("Route to load jquery-3.5.1.slim.min.js file");
-    request->send(SPIFFS, "/jquery-3.5.1.slim.min.js", "text/javascript");
+  server.on("/jquery-2.2.4.min.js", HTTP_GET, [](AsyncWebServerRequest *request) {
+    Serial.println("Route to load jquery-2.2.4.min.js file");
+    request->send(SPIFFS, "/jquery-2.2.4.min.js", "text/javascript");
   });
 
   // Route to load favicon.ico file
@@ -268,7 +270,7 @@ void setup()
   // Initialize SPIFFS
   Serial.println("Mounting FS...");
   if (!SPIFFS.begin()){
-    Serial.println("An Error has occurred while mounting SPIFFS");
+    Serial.println("An Error has occurred while mounting LittleFS");
     return;
   }
 
