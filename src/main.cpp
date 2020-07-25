@@ -21,41 +21,28 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 */
+
 #include <ArduinoOTA.h>
-#include <ArduinoJson.h>
 #ifdef ESP32
-  #include <LittleFS.h>
-  #include <WiFi.h>
-  #include <AsyncTCP.h>
-  #include <ESPmDNS.h>
-  #include <ESP32Ticker.h>
-  #define HOSTNAME "esp32"
-  #define MONITOR_SPEED 115200
-
-  const char *ap_ssid       = "ESP32-G-AP";
-  const char *ap_password   = "room03601";
-
+#define HOSTNAME "esp32"
+#define MONITOR_SPEED 115200
+#define AP_NAME "ESP32-G-AP"
 #elif defined(ESP8266)
-  #include <LittleFS.h>
-  #include <ESP8266WiFi.h>
-  //#include <ESPAsyncTCP.h>
-  #include <ESP8266mDNS.h>
-  #include <Ticker.h>
-  #define HOSTNAME "esp8266"
-  #define MONITOR_SPEED 74880
-
-  const char *ap_ssid       = "ESP8266-G-AP";
-  const char *ap_password   = "room03601";
-
+#include <LittleFS.h>
+#include <ESP8266WiFi.h>
+#define HOSTNAME "esp8266"
+#define MONITOR_SPEED 74880
+#define AP_NAME "ESP8266-G-AP"
 #endif
 
 #include <ESPAsyncWebServer.h>
-#include <SPIFFSEditor.h>
+#include <ESPAsyncDNSServer.h>
+#include <ESPAsyncWiFiManager.h>
 #include <TelnetSpy.h>
 #include <Servo.h>
-
-const char *sta_ssid      = "Buffalo-G-FAA8";
-const char *sta_password  = "34ywce7cffyup";
+#include <EEPROM.h>
+#include <Ticker.h>
+#include <ArduinoJson.h>
 
 Ticker countDown;
 
@@ -64,39 +51,45 @@ const int ledPin = 5;
 // Stores LED state
 String ledState;
 
-// Create AsyncWebServer object on port 80
 AsyncWebServer server(80);
+AsyncDNSServer dns;
+AsyncWiFiManager wifiManager(&server, &dns);
 AsyncEventSource events("/events");
 
 static const int SERVO_NUM = 4;
 
-Servo myservo;            
+Servo myservo;
 
 TelnetSpy SerialAndTelnet;
 
-//#define _SERIAL SerialAndTelnet
 #define Serial SerialAndTelnet
 
-#define MSG_NOTHING            0x00
-#define MSG_TIMER_START        0x01
-#define MSG_TIMER_RESET        0x02
-#define MSG_TIMER_COUNTDOWN    0x03
-#define MSG_SERVO_ON           0x04
-#define MSG_IGNAITER_ON        0x05
+#define MSG_NOTHING 0x00
+#define MSG_TIMER_START 0x01
+#define MSG_TIMER_RESET 0x02
+#define MSG_TIMER_COUNTDOWN 0x03
+#define MSG_SERVO_ON 0x04
+#define MSG_IGNAITER_ON 0x05
+#define MSG_AP_ON 0x06
+#define MSG_STA_ON 0x07
+#define MSG_ESP_RESET 0xFF
 
-int gMsgEventID   = MSG_NOTHING;
+int gMsgEventID = MSG_NOTHING;
 
-int gSPERK_TIME    = 50;//default
-int gRELEASE_TIME  = 10;//default
+int gSPERK_TIME = 50;   //default
+int gRELEASE_TIME = 10; //default
 
-String processor(const String &var) {
+String processor(const String &var)
+{
   Serial.println("processor()");
 
-  if(var == "SPERK_TIME"){
+  if (var == "SPERK_TIME")
+  {
     String value = String(gSPERK_TIME);
     return value;
   }
-  else if(var == "RELEASE_TIME"){
+  else if (var == "RELEASE_TIME")
+  {
     String value = String(gRELEASE_TIME);
     return value;
   }
@@ -104,37 +97,44 @@ String processor(const String &var) {
   return "0";
 }
 
-void telnetConnected() {
+void telnetConnected()
+{
   Serial.println("Telnet connection established.");
 }
 
-void telnetDisconnected() {
+void telnetDisconnected()
+{
   Serial.println("Telnet connection closed.");
 }
 
-void sendCountDownMsg(int state){
+void sendCountDownMsg(int state)
+{
   gMsgEventID = MSG_TIMER_COUNTDOWN;
 }
 
-void onRequest(AsyncWebServerRequest *request){
+void onRequest(AsyncWebServerRequest *request)
+{
   Serial.println("onRequest() Handle Unknown Request");
   //Handle Unknown Request
   request->send(404);
 }
 
-void onUpload(AsyncWebServerRequest *request, String filename, size_t index, uint8_t *data, size_t len, bool final){
+void onUpload(AsyncWebServerRequest *request, String filename, size_t index, uint8_t *data, size_t len, bool final)
+{
   Serial.println("onUpload() Handle upload");
   //Handle upload
 }
 
-void onBody(AsyncWebServerRequest *request, uint8_t *data, size_t len, size_t index, size_t total){
+void onBody(AsyncWebServerRequest *request, uint8_t *data, size_t len, size_t index, size_t total)
+{
   Serial.println("onBody()");
   String jsonBody;
 
   const size_t capacity = JSON_OBJECT_SIZE(2) + 30;
   DynamicJsonDocument doc(capacity);
 
-  for(size_t i = 0; i < len; i++){
+  for (size_t i = 0; i < len; i++)
+  {
     jsonBody += (char)data[i];
   }
 
@@ -145,53 +145,53 @@ void onBody(AsyncWebServerRequest *request, uint8_t *data, size_t len, size_t in
   gSPERK_TIME = doc["SPERK_TIME"];
   gRELEASE_TIME = doc["RELEASE_TIME"];
 
-  Serial.printf("SPERK_TIME = %d RELEASE_TIME = %d\n", gSPERK_TIME, gRELEASE_TIME); 
-
+  Serial.printf("SPERK_TIME = %d RELEASE_TIME = %d\n", gSPERK_TIME, gRELEASE_TIME);
 }
 
-void setup()
+void initPort()
 {
-  //Port Init
   myservo.attach(SERVO_NUM);
   myservo.write(90);
 
   pinMode(ledPin, OUTPUT);
   digitalWrite(ledPin, LOW);
+}
 
-  //Telnet Init
+void initTelnet()
+{
   SerialAndTelnet.setWelcomeMsg("Welcome to ESP Terminal.\n");
   SerialAndTelnet.setCallbackOnConnect(telnetConnected);
   SerialAndTelnet.setCallbackOnDisconnect(telnetDisconnected);
+
   Serial.begin(MONITOR_SPEED);
   delay(100); // Wait for serial port
   Serial.setDebugOutput(false);
   delay(1000);
+}
 
-  WiFi.mode(WIFI_AP_STA);
-  WiFi.begin(sta_ssid, sta_password);
+void initWiFi()
+{
+  EEPROM.begin(100);
+  unsigned long timeout = EEPROM.read(0);
+  Serial.printf("WiFi timeout = %d\n", timeout);
 
-  if (WiFi.waitForConnectResult() != WL_CONNECTED) {
-    Serial.println("STA: Failed!");
-    Serial.println("[Access Point] Mode");
-    WiFi.disconnect(false);
-    delay(5000);
-    WiFi.softAP(ap_ssid, ap_password);
-    Serial.println(WiFi.softAPIP().toString());
+  if (timeout > 1)
+  {
+    //APAmode
+    timeout = 180;
+    EEPROM.put<unsigned long>(0, timeout);
+    EEPROM.commit();
   }
-  else{
-    Serial.println("STA: Success!");
-    Serial.println("[STA] Mode");
-    Serial.println(WiFi.localIP().toString());
-  }
+  
+  wifiManager.resetSettings();
+  delay(200);
+  wifiManager.setDebugOutput(true);
+  wifiManager.setConfigPortalTimeout(timeout);
+  wifiManager.autoConnect(AP_NAME);
+}
 
-  if (!MDNS.begin(HOSTNAME)){
-    Serial.println("Error setting up MDNS responder!");
-    while (1){
-      delay(1000);
-    }
-  }
-  Serial.println("mDNS responder started");
-
+void initServer()
+{
   // Route to load style.css file
   server.on("/style.css", HTTP_GET, [](AsyncWebServerRequest *request) {
     Serial.println("Route to load style.css file");
@@ -215,10 +215,12 @@ void setup()
     request->send(LittleFS, "/index.html", String(), false, processor);
   });
 
-  server.on("/", HTTP_POST, [](AsyncWebServerRequest *request) {
-    Serial.println("[HTTP_POST] /");
-    request->send(LittleFS, "/index.html", String(), false, processor);
-  }, NULL, onBody);
+  server.on(
+      "/", HTTP_POST, [](AsyncWebServerRequest *request) {
+        Serial.println("[HTTP_POST] /");
+        request->send(LittleFS, "/index.html", String(), false, processor);
+      },
+      NULL, onBody);
 
   // Route for /settings web page
   server.on("/settings", HTTP_GET, [](AsyncWebServerRequest *request) {
@@ -226,9 +228,21 @@ void setup()
     request->send(LittleFS, "/settings.html", String(), false, processor);
   });
 
-  server.on("/settings", HTTP_POST, [](AsyncWebServerRequest *request) {
-    Serial.println("[HTTP_POST] /settings");
-  }, NULL, onBody);
+  server.on(
+      "/APmode", HTTP_GET, [](AsyncWebServerRequest *request) {
+        Serial.println("[HTTP_GET] /APmode");
+        gMsgEventID = MSG_AP_ON;
+        request->send(LittleFS, "/settings.html", String(), false, processor);
+      },
+      NULL, NULL);
+
+  server.on(
+      "/STAmode", HTTP_GET, [](AsyncWebServerRequest *request) {
+        Serial.println("[HTTP_GET] /STAmode");
+        gMsgEventID = MSG_STA_ON;
+        request->send(LittleFS, "/settings.html", String(), false, processor);
+      },
+      NULL, NULL);
 
   //REST API
   //Start timer
@@ -245,34 +259,7 @@ void setup()
     request->send(LittleFS, "/index.html", String(), false, processor);
   });
 
-  ArduinoOTA.onEnd([]() {
-    Serial.println("\nEnd");
-  });
-  
-  ArduinoOTA.onProgress([](unsigned int progress, unsigned int total) {
-    Serial.printf("Progress: %u%%\r", (progress / (total / 100)));
-  });
-  
-  ArduinoOTA.onError([](ota_error_t error) {
-    Serial.printf("Error[%u]: ", error);
-    if (error == OTA_AUTH_ERROR) Serial.println("Auth Failed");
-    else if (error == OTA_BEGIN_ERROR) Serial.println("Begin Failed");
-    else if (error == OTA_CONNECT_ERROR) Serial.println("Connect Failed");
-    else if (error == OTA_RECEIVE_ERROR) Serial.println("Receive Failed");
-    else if (error == OTA_END_ERROR) Serial.println("End Failed");
-  });
-
-  ArduinoOTA.setHostname(HOSTNAME);
-  ArduinoOTA.begin();
-  
-  // Initialize SPIFFS
-  Serial.println("Mounting FS...");
-  if (!LittleFS.begin()){
-    Serial.println("An Error has occurred while mounting LittleFS");
-    return;
-  }
-
-  events.onConnect([](AsyncEventSourceClient *client){
+  events.onConnect([](AsyncEventSourceClient *client) {
     client->send("10", NULL, millis(), 1000);
   });
 
@@ -283,14 +270,69 @@ void setup()
   // ends in the callbacks below.
   server.onNotFound(onRequest);
   server.onFileUpload(onUpload);
-  //server.onRequestBody(onBody);
+
+  server.begin();
+  Serial.println("Server Started");
+}
+
+void initOta()
+{
+  ArduinoOTA.onStart([]() {
+    String type;
+    if (ArduinoOTA.getCommand() == U_FLASH)
+      type = "sketch";
+    else
+      type = "filesystem";
+
+    Serial.println("Start updating " + type);
+  });
+
+  ArduinoOTA.onEnd([]() {
+    Serial.println("\nEnd");
+  });
+
+  ArduinoOTA.onProgress([](unsigned int progress, unsigned int total) {
+    Serial.printf("Progress: %u%%\r", (progress / (total / 100)));
+  });
+
+  ArduinoOTA.onError([](ota_error_t error) {
+    Serial.printf("Error[%u]: ", error);
+    if (error == OTA_AUTH_ERROR)
+      Serial.println("Auth Failed");
+    else if (error == OTA_BEGIN_ERROR)
+      Serial.println("Begin Failed");
+    else if (error == OTA_CONNECT_ERROR)
+      Serial.println("Connect Failed");
+    else if (error == OTA_RECEIVE_ERROR)
+      Serial.println("Receive Failed");
+    else if (error == OTA_END_ERROR)
+      Serial.println("End Failed");
+  });
+
+  ArduinoOTA.setHostname(HOSTNAME);
 
   Serial.print("Hostname: ");
   Serial.println(ArduinoOTA.getHostname() + ".local");
 
-  server.begin();
-  Serial.println("Server Started");
+  ArduinoOTA.begin();
+}
 
+void setup()
+{
+  initTelnet();
+
+  // Initialize LittleFS
+  Serial.println("Mounting LittleFS...");
+  if (!LittleFS.begin())
+  {
+    Serial.println("An Error has occurred while mounting LittleFS");
+    return;
+  }
+
+  initPort();
+  initWiFi();
+  initServer();
+  initOta();
 }
 
 //Event Message Loop
@@ -302,61 +344,90 @@ void loop()
   SerialAndTelnet.handle();
   ArduinoOTA.handle();
 
-  switch(gMsgEventID){
-    case MSG_TIMER_START:
-        countDown.attach_ms(1000, sendCountDownMsg, 0);
+  switch (gMsgEventID)
+  {
+  case MSG_TIMER_START:
+    countDown.attach_ms(1000, sendCountDownMsg, 0);
 
-        gMsgEventID = MSG_NOTHING;
+    gMsgEventID = MSG_NOTHING;
     break;
-    case MSG_TIMER_COUNTDOWN:
-        
-        nCount--;
-        
-        Serial.printf("Timer = %d\r\n", nCount);
+  case MSG_TIMER_COUNTDOWN:
 
-        sprintf(p, "%d", nCount);
-        events.send(p, "count");
+    nCount--;
 
-        if(nCount == 0){
-          countDown.detach();
-          gMsgEventID = MSG_IGNAITER_ON;
-        }
-        else{
-          gMsgEventID = MSG_NOTHING;
-        }
+    Serial.printf("Timer = %d\r\n", nCount);
+
+    sprintf(p, "%d", nCount);
+    events.send(p, "count");
+
+    if (nCount == 0)
+    {
+      countDown.detach();
+      gMsgEventID = MSG_IGNAITER_ON;
+    }
+    else
+    {
+      gMsgEventID = MSG_NOTHING;
+    }
     break;
-    case MSG_SERVO_ON:
-        Serial.printf("RELEASE_TIME = %d[ms]\n", gRELEASE_TIME);        
-        delay(gRELEASE_TIME);// wait from MSG_IGNAITER_ON
-        
-        //Serial.println("Servo ON!");
-        myservo.write(150);
-        delay(1000);
+  case MSG_SERVO_ON:
+    Serial.printf("RELEASE_TIME = %d[ms]\n", gRELEASE_TIME);
+    delay(gRELEASE_TIME); // wait from MSG_IGNAITER_ON
 
-        gMsgEventID = MSG_TIMER_RESET;
+    //Serial.println("Servo ON!");
+    myservo.write(150);
+    delay(1000);
+
+    gMsgEventID = MSG_TIMER_RESET;
     break;
-    case MSG_IGNAITER_ON:
+  case MSG_IGNAITER_ON:
 
-        Serial.printf("SPERK_TIME = %d[ms]\n", gSPERK_TIME);
-        Serial.println("Ignaiter ON!");
+    Serial.printf("SPERK_TIME = %d[ms]\n", gSPERK_TIME);
+    Serial.println("Ignaiter ON!");
 
-        digitalWrite(ledPin, HIGH);
-        delay(gSPERK_TIME);
-        digitalWrite(ledPin, LOW);
-        Serial.println("Ignaiter OFF!");
-        gMsgEventID = MSG_SERVO_ON;
+    digitalWrite(ledPin, HIGH);
+    delay(gSPERK_TIME);
+    digitalWrite(ledPin, LOW);
+    Serial.println("Ignaiter OFF!");
+    gMsgEventID = MSG_SERVO_ON;
     break;
-    case MSG_TIMER_RESET:
-        Serial.println("Reset");
-        countDown.detach();        
-        myservo.write(90);
-        nCount = 10;
+  case MSG_TIMER_RESET:
+    Serial.println("Reset");
+    countDown.detach();
+    myservo.write(90);
+    nCount = 10;
 
-        sprintf(p, "%d", nCount);
-        events.send(p, "count");
-        gMsgEventID = MSG_NOTHING;
+    sprintf(p, "%d", nCount);
+    events.send(p, "count");
+    gMsgEventID = MSG_NOTHING;
     break;
-    default:
-      ;//MSG_NOTHING
-  } 
+  case MSG_STA_ON:
+    Serial.println("Config Portal ON!");
+
+    EEPROM.put<unsigned long>(0, 255);
+    EEPROM.commit();
+
+    Serial.println("Reset ESP!");
+
+    gMsgEventID = MSG_ESP_RESET;
+    break;
+  case MSG_AP_ON:
+    Serial.println("Shift AP mode.");
+
+    EEPROM.put<unsigned long>(0, 1);
+    EEPROM.commit();
+
+    Serial.println("Reset ESP!");
+
+    gMsgEventID = MSG_ESP_RESET;
+
+    break;
+  case MSG_ESP_RESET:
+    delay(5000);
+    ESP.reset();
+    break;
+  default:
+    //MSG_NOTHING
+    break;
+  }
 }

@@ -1,57 +1,73 @@
 <!DOCTYPE html>
 <html>
-  <head>
-    <title>Settings</title>
-    <link rel="icon" href="favicon.ico">
-    <link type="text/css" rel="stylesheet" href="style.css" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
-    <meta http-equiv="content-type" charset="utf-8">    
 
-    <script src="jquery-2.2.4.min.js"></script>
+<head>
+  <title>Settings</title>
+  <link rel="icon" href="favicon.ico">
+  <link type="text/css" rel="stylesheet" href="style.css" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+  <meta http-equiv="content-type" charset="utf-8">
 
-    <script>
+  <script src="jquery-2.2.4.min.js"></script>
 
-      function doPost(url, data) {
-        console.log(url);
-        var xhr = new XMLHttpRequest();
-        xhr.open("POST", url);
-        xhr.setRequestHeader("Content-Type", "application/json");
-        xhr.onload = () => {
-          console.log(xhr.status);
-          console.log("success!");
-        };
-        xhr.onerror = () => {
-          console.log(xhr.status);
-          console.log("error!");
-        };
-        xhr.send(data);
-      }
-      
-      $(document).on('click touchstart', '#SUBMIT_SETTING', function(){
-      
-        var url = "http://"+document.location.host+"/";
-        var JSONdata = {
-          SPERK_TIME: parseInt($("#SPERK_TIME").val()),
-          RELEASE_TIME: parseInt($("#RELEASE_TIME").val())      
-        };
+  <script>
 
-        doPost(url, JSON.stringify(JSONdata));
-      
-      })
-    </script>
+    function doPost(url, data) {
+      console.log(url);
+      var xhr = new XMLHttpRequest();
+      xhr.open("POST", url);
+      xhr.setRequestHeader("Content-Type", "application/json");
+      xhr.onload = () => {
+        console.log(xhr.status);
+        console.log("success!");
+      };
+      xhr.onerror = () => {
+        console.log(xhr.status);
+        console.log("error!");
+      };
+      xhr.send(data);
+    }
 
-    </head>
-    <body id="body"> 
-    <h1>Settings</h1>
-    <hr>
-      <table>
-        <tr>
-          <td>放電時間(ms)：</td><td><input type="number" id="SPERK_TIME" name="SPERK_TIME" value="%SPERK_TIME%" /></td>
-        </tr>
-        <tr>
-          <td>リリース時間(ms)：</td><td><input type="number" id="RELEASE_TIME" name="RELEASE_TIME" value="%RELEASE_TIME%" /><td>
-        </tr>
-      </table>
-      <a href="/"><button id="SUBMIT_SETTING" class="button button3">設定</button></a>
-    </body>
+    $(document).on('click touchstart touchend', '#SUBMIT_SETTING', function () {
+
+      var url = "http://" + document.location.host + "/";
+      var JSONdata = {
+        SPERK_TIME: parseInt($("#SPERK_TIME").val()),
+        RELEASE_TIME: parseInt($("#RELEASE_TIME").val())
+      };
+
+      doPost(url, JSON.stringify(JSONdata));
+
+    })
+
+  </script>
+
+</head>
+
+<body id="body">
+  <h1>Settings</h1>
+  <hr>
+  <table>
+    <tr>
+      <td>Sperking Time(ms)</td>
+    </tr>
+    <tr>
+      <td><input type="number" id="SPERK_TIME" name="SPERK_TIME" value="%SPERK_TIME%" /></td>
+    </tr>
+    <tr>
+      <td>Release Time(ms)</td>
+    </tr>
+    <tr>
+      <td><input type="number" id="RELEASE_TIME" name="RELEASE_TIME" value="%RELEASE_TIME%" /></td>
+    </tr>
+  </table>
+  <p></p>
+  <a href="/"><button id="SUBMIT_SETTING" class="button button3">Set value</button></a>
+  <p></p>
+  <a href="/STAmode"><button id="STA" class="button button3">Start Config Portal</button></a>
+  <p></p>
+  <a href="/APmode"><button id="AP" class="button button3">Start AP mode</button></a>
+  <hr>
+</body>
+
 </html>

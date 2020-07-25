@@ -1,54 +1,60 @@
 <!DOCTYPE html>
 <html>
-  <head>
-    <title>Rocket Controller</title>
-    <link rel="icon" href="favicon.ico">
-    <link type="text/css" rel="stylesheet" href="style.css" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
-    <meta http-equiv="content-type" charset="utf-8">    
 
-    <script type="text/javascript">
-      function ge(s){ return document.getElementById(s);}
-      
-      function PrintMessage(msg){
-        ge("countdown").innerHTML = msg;
-      }
+<head>
+  <title>Rocket Controller</title>
+  <link rel="icon" href="favicon.ico">
+  <link type="text/css" rel="stylesheet" href="style.css" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+  <meta http-equiv="content-type" charset="utf-8">
 
-      function startEvents(){
-        var es = new EventSource('/events');
-        es.onopen = function(e) {
-          //addMessage("Events Opened");
-        };
-        es.onerror = function(e) {
-          if (e.target.readyState != EventSource.OPEN) {
-            //addMessage("Events Closed");
-          }
-        };
+  <script type="text/javascript">
+    function ge(s) { return document.getElementById(s); }
 
-        es.onmessage = function(e) {
-          PrintMessage(e.data);
-        };
+    function PrintMessage(msg) {
+      ge("countdown").innerHTML = msg;
+    }
 
-        es.addEventListener('count', function(e) {
-          PrintMessage(e.data);
-        }, false);
-      }
+    function startEvents() {
+      var es = new EventSource('/events');
+      es.onopen = function (e) {
+        //addMessage("Events Opened");
+      };
+      es.onerror = function (e) {
+        if (e.target.readyState != EventSource.OPEN) {
+          //addMessage("Events Closed");
+        }
+      };
 
-      function onBodyLoad(){
-        startEvents();
-      }
+      es.onmessage = function (e) {
+        PrintMessage(e.data);
+      };
 
-    </script>
-  </head>
-    <body id="body" onload="onBodyLoad()"> 
-    <h1>Rocket Controller</h1>
-    <hr>
-    <p></p>
-    <a href="/start"><button id="button01" class="button">Start</button></a>
-    <a href="/reset"><button id="button02" class="button button2">Reset</button></a>
-    <p></p>
-    <a href="/settings"><botton id="button03" class="button button3">Setting</botton></a>
+      es.addEventListener('count', function (e) {
+        PrintMessage(e.data);
+      }, false);
+    }
 
-    <div style="font-size: 240px; font-family:'HiraKakuProN-W6'; color:whitesmoke;" id="countdown"></div>
+    function onBodyLoad() {
+      startEvents();
+    }
+
+  </script>
+</head>
+
+<body id="body" onload="onBodyLoad()">
+  <h1>Rocket Controller</h1>
+  <hr>
+  <p></p>
+  <a href="/start"><button id="button01" class="button">Start</button></a>
+  <a href="/reset"><button id="button02" class="button button2">Reset</button></a>
+  <p></p>
+  <a href="/settings">
+    <botton id="button03" class="button button3">Settings</botton>
+  </a>
+
+  <div class="countNumber" id="countdown"></div>
+  <hr>
 </body>
+
 </html>

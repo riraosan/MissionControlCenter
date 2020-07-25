@@ -1,5 +1,5 @@
 html {
-  font-family: Helvetica;
+  font-family: verdana;
   display: inline-block;
   margin: 0px auto;
   text-align: center;
@@ -7,11 +7,27 @@ html {
   color: aliceblue;
 }
 
+div, input {
+  padding: 5px;
+  font-size: 1em;
+}
+
+input {
+  width: 95%;
+}
+
 div {
   text-align: center;
 }
 
+.countNumber {
+  font-size: 240px; 
+  font-family:'HiraKakuProN-W6'; 
+  color:whitesmoke;  
+}
+
 table {
+  text-align:   left;
   margin-left:  auto;
   margin-right: auto;
 }
