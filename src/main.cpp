@@ -43,8 +43,8 @@ SOFTWARE.
 #include <EEPROM.h>
 #include <Ticker.h>
 #include <ArduinoJson.h>
+#include <StreamUtils.h>
 
-Ticker countDown;
 
 // Set LED GPIO
 const int ledPin = 5;
@@ -59,8 +59,11 @@ AsyncEventSource events("/events");
 static const int SERVO_NUM = 4;
 
 Servo myservo;
-
+Ticker countDown;
 TelnetSpy SerialAndTelnet;
+
+EepromStream wifMode(0, 4);
+EepromStream settings(5, 512);
 
 #define Serial SerialAndTelnet
 
@@ -145,6 +148,9 @@ void onBody(AsyncWebServerRequest *request, uint8_t *data, size_t len, size_t in
   gSPERK_TIME = doc["SPERK_TIME"];
   gRELEASE_TIME = doc["RELEASE_TIME"];
 
+  serializeJson(doc, settings);
+  settings.flush();//write to eeprom 
+
   Serial.printf("SPERK_TIME = %d RELEASE_TIME = %d\n", gSPERK_TIME, gRELEASE_TIME);
 }
 
@@ -159,6 +165,8 @@ void initPort()
 
 void initTelnet()
 {
+  delay(1000);
+
   SerialAndTelnet.setWelcomeMsg("Welcome to ESP Terminal.\n");
   SerialAndTelnet.setCallbackOnConnect(telnetConnected);
   SerialAndTelnet.setCallbackOnDisconnect(telnetDisconnected);
@@ -173,17 +181,21 @@ void initWiFi()
 {
   EEPROM.begin(100);
   unsigned long timeout = EEPROM.read(0);
-  Serial.printf("WiFi timeout = %d\n", timeout);
+  Serial.printf("WiFi connecting timeout = %d\n", timeout);
 
   if (timeout > 1)
   {
-    //APAmode
+    //STA mode
     timeout = 180;
     EEPROM.put<unsigned long>(0, timeout);
     EEPROM.commit();
   }
-  
-  wifiManager.resetSettings();
+  else
+  {
+    //AP mode
+    wifiManager.resetSettings();  
+  }
+
   delay(200);
   wifiManager.setDebugOutput(true);
   wifiManager.setConfigPortalTimeout(timeout);
@@ -198,9 +210,9 @@ void initServer()
     request->send(LittleFS, "/style.css", "text/css");
   });
 
-  server.on("/jquery-2.2.4.min.js", HTTP_GET, [](AsyncWebServerRequest *request) {
-    Serial.println("Route to load jquery-2.2.4.min.js file");
-    request->send(LittleFS, "/jquery-2.2.4.min.js", "text/javascript");
+  server.on("/jquery-3.5.1.slim.min.js", HTTP_GET, [](AsyncWebServerRequest *request) {
+    Serial.println("Route to load jquery-3.5.1.slim.min.js file");
+    request->send(LittleFS, "/jquery-3.5.1.slim.min.js", "text/javascript");
   });
 
   // Route to load favicon.ico file
@@ -317,10 +329,8 @@ void initOta()
   ArduinoOTA.begin();
 }
 
-void setup()
+void initLittleFS()
 {
-  initTelnet();
-
   // Initialize LittleFS
   Serial.println("Mounting LittleFS...");
   if (!LittleFS.begin())
@@ -328,7 +338,12 @@ void setup()
     Serial.println("An Error has occurred while mounting LittleFS");
     return;
   }
+}
 
+void setup()
+{
+  initTelnet();
+  initLittleFS();
   initPort();
   initWiFi();
   initServer();

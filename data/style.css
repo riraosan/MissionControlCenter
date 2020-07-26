@@ -41,7 +41,11 @@ p {
   font-size: 1.5rem;
 }
 
-.button {
+button {
+  cursor: pointer;
+}
+
+.btn1 {
   display: inline-block;
   background-color: rgba(9, 255, 0, 0.425);
   border: none;
@@ -51,14 +55,13 @@ p {
   text-decoration: none;
   font-size: 30px;
   margin: 2px;
-  cursor: pointer;
 }
 
-.button2 {
+.btn2 {
   background-color: rgba(255, 38, 0, 0.932);
 }
 
-.button3 {
+.btn3 {
   background-color: rgb(62, 90, 167);
   font-size: 20px;
 }

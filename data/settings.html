@@ -8,9 +8,9 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
   <meta http-equiv="content-type" charset="utf-8">
 
-  <script src="jquery-2.2.4.min.js"></script>
+  <script type="text/javascript" src="jquery-3.5.1.slim.min.js"></script>
 
-  <script>
+  <script type="text/javascript">
 
     function doPost(url, data) {
       console.log(url);
@@ -28,7 +28,7 @@
       xhr.send(data);
     }
 
-    $(document).on('click touchstart touchend', '#SUBMIT_SETTING', function () {
+    $(document).on('touchstart touchend', '#SUBMIT_SETTING', function () {
 
       var url = "http://" + document.location.host + "/";
       var JSONdata = {
@@ -62,11 +62,13 @@
     </tr>
   </table>
   <p></p>
-  <a href="/"><button id="SUBMIT_SETTING" class="button button3">Set value</button></a>
+  <div class="container">
+  <button onclick="location.href='/'" id="SUBMIT_SETTING" class="btn1 btn3">Set value</button>
   <p></p>
-  <a href="/STAmode"><button id="STA" class="button button3">Start Config Portal</button></a>
+  <button onclick="location.href='/STAmode'" id="STA" class="btn1 btn3">Start Config Portal</button>
   <p></p>
-  <a href="/APmode"><button id="AP" class="button button3">Start AP mode</button></a>
+  <button onclick="location.href='/APmode'" id="AP" class="btn1 btn3">Start AP mode</button>
+  </div>
   <hr>
 </body>
 
