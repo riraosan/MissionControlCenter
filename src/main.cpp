@@ -81,6 +81,11 @@ EepromStream settings(0, capacity);
 
 int gMsgEventID = MSG_NOTHING;
 
+void SendMessage(int nMessageID)
+{
+  gMsgEventID = nMessageID;
+}
+
 String processor(const String &var)
 {
   Serial.println("processor()");
@@ -147,12 +152,28 @@ void onBody(AsyncWebServerRequest *request, uint8_t *data, size_t len, size_t in
   settings.flush(); //write to eeprom
 
   const char *MODE = doc["MODE"];
+
+  String mode = String(MODE);
+
   int SPERK_TIME = doc["SPERK_TIME"];
   int RELEASE_TIME = doc["RELEASE_TIME"];
 
   Serial.printf("MODE = %s ", MODE);
   Serial.printf("SPERK_TIME = %d ", SPERK_TIME);
   Serial.printf("RELEASE_TIME = %d \n", RELEASE_TIME);
+
+  if (mode == "STA_MODE")
+  {
+    SendMessage(MSG_STAMODE_ON);
+  }
+  else if (mode == "AP_MODE")
+  {
+    SendMessage(MSG_APMODE_ON);
+  }
+  else
+  {
+    SendMessage(MSG_SET_TIME);
+  }
 }
 
 void initPort()
@@ -359,7 +380,7 @@ void loop()
   case MSG_START_TIMER:
     countDown.attach_ms(1000, sendCountDownMsg, 0);
 
-    gMsgEventID = MSG_NOTHING;
+    SendMessage(MSG_NOTHING);
     break;
   case MSG_COUNT_TIMER:
 
@@ -373,11 +394,11 @@ void loop()
     if (nCount == 0)
     {
       countDown.detach();
-      gMsgEventID = MSG_IGNAITER_ON;
+      SendMessage(MSG_IGNAITER_ON);
     }
     else
     {
-      gMsgEventID = MSG_NOTHING;
+      SendMessage(MSG_NOTHING);
     }
     break;
   case MSG_SERVO_ON:
@@ -390,7 +411,7 @@ void loop()
     myservo.write(150);
     delay(1000);
 
-    gMsgEventID = MSG_RESET_TIMER;
+    SendMessage(MSG_RESET_TIMER);
   }
   break;
   case MSG_IGNAITER_ON:
@@ -403,7 +424,8 @@ void loop()
     delay(sperk_time);
     digitalWrite(ledPin, LOW);
     Serial.println("Ignaiter OFF!");
-    gMsgEventID = MSG_SERVO_ON;
+
+    SendMessage(MSG_SERVO_ON);
   }
   break;
   case MSG_RESET_TIMER:
@@ -414,17 +436,17 @@ void loop()
 
     sprintf(p, "%d", nCount);
     events.send(p, "count");
-    gMsgEventID = MSG_NOTHING;
+    SendMessage(MSG_NOTHING);
     break;
   case MSG_STAMODE_ON:
     Serial.println("STA mode ON!");
     //SOMETHING TODO
-    gMsgEventID = MSG_RESET_ESP;
+    SendMessage(MSG_RESET_ESP);
     break;
   case MSG_APMODE_ON:
     Serial.println("AP mode ON!");
     //SOMETHING TODO
-    gMsgEventID = MSG_RESET_ESP;
+    SendMessage(MSG_RESET_ESP);
     break;
   case MSG_RESET_ESP:
     Serial.println("Reset ESP!");
