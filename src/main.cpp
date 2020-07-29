@@ -45,7 +45,6 @@ SOFTWARE.
 #include <ArduinoJson.h>
 #include <StreamUtils.h>
 
-
 // Set LED GPIO
 const int ledPin = 5;
 // Stores LED state
@@ -62,25 +61,25 @@ Servo myservo;
 Ticker countDown;
 TelnetSpy SerialAndTelnet;
 
-EepromStream wifMode(0, 4);
-EepromStream settings(5, 512);
+const size_t capacity = JSON_OBJECT_SIZE(3) + 40;
+DynamicJsonDocument doc(capacity);
+EepromStream settings(0, capacity);
 
 #define Serial SerialAndTelnet
 
+//Message Name
 #define MSG_NOTHING 0x00
-#define MSG_TIMER_START 0x01
-#define MSG_TIMER_RESET 0x02
-#define MSG_TIMER_COUNTDOWN 0x03
+#define MSG_START_TIMER 0x01
+#define MSG_RESET_TIMER 0x02
+#define MSG_COUNT_TIMER 0x03
 #define MSG_SERVO_ON 0x04
 #define MSG_IGNAITER_ON 0x05
-#define MSG_AP_ON 0x06
-#define MSG_STA_ON 0x07
-#define MSG_ESP_RESET 0xFF
+#define MSG_APMODE_ON 0x06
+#define MSG_STAMODE_ON 0x07
+#define MSG_SET_TIME 0x08
+#define MSG_RESET_ESP 0xFF
 
 int gMsgEventID = MSG_NOTHING;
-
-int gSPERK_TIME = 50;   //default
-int gRELEASE_TIME = 10; //default
 
 String processor(const String &var)
 {
@@ -88,12 +87,12 @@ String processor(const String &var)
 
   if (var == "SPERK_TIME")
   {
-    String value = String(gSPERK_TIME);
+    String value = String((int)doc["SPERK_TIME"]);
     return value;
   }
   else if (var == "RELEASE_TIME")
   {
-    String value = String(gRELEASE_TIME);
+    String value = String((int)doc["RELEASE_TIME"]);
     return value;
   }
 
@@ -112,7 +111,7 @@ void telnetDisconnected()
 
 void sendCountDownMsg(int state)
 {
-  gMsgEventID = MSG_TIMER_COUNTDOWN;
+  gMsgEventID = MSG_COUNT_TIMER;
 }
 
 void onRequest(AsyncWebServerRequest *request)
@@ -133,25 +132,27 @@ void onBody(AsyncWebServerRequest *request, uint8_t *data, size_t len, size_t in
   Serial.println("onBody()");
   String jsonBody;
 
-  const size_t capacity = JSON_OBJECT_SIZE(2) + 30;
-  DynamicJsonDocument doc(capacity);
-
   for (size_t i = 0; i < len; i++)
   {
     jsonBody += (char)data[i];
   }
 
-  //Serial.println(jsonBody);
+  Serial.println(jsonBody);
 
+  //jsonBody to doc
   deserializeJson(doc, jsonBody);
 
-  gSPERK_TIME = doc["SPERK_TIME"];
-  gRELEASE_TIME = doc["RELEASE_TIME"];
-
+  //doc to settings(data to eeprom)
   serializeJson(doc, settings);
-  settings.flush();//write to eeprom 
+  settings.flush(); //write to eeprom
 
-  Serial.printf("SPERK_TIME = %d RELEASE_TIME = %d\n", gSPERK_TIME, gRELEASE_TIME);
+  const char *MODE = doc["MODE"];
+  int SPERK_TIME = doc["SPERK_TIME"];
+  int RELEASE_TIME = doc["RELEASE_TIME"];
+
+  Serial.printf("MODE = %s ", MODE);
+  Serial.printf("SPERK_TIME = %d ", SPERK_TIME);
+  Serial.printf("RELEASE_TIME = %d \n", RELEASE_TIME);
 }
 
 void initPort()
@@ -179,22 +180,32 @@ void initTelnet()
 
 void initWiFi()
 {
-  EEPROM.begin(100);
-  unsigned long timeout = EEPROM.read(0);
-  Serial.printf("WiFi connecting timeout = %d\n", timeout);
+  unsigned long timeout = 0;
 
-  if (timeout > 1)
+  deserializeJson(doc, settings);
+
+  const char *MODE = doc["MODE"];
+  String mode = String(MODE);
+
+  if (mode == "STA_MODE")
   {
-    //STA mode
+    //Changing STA mode (Connect to WiFi Access Point)
     timeout = 180;
-    EEPROM.put<unsigned long>(0, timeout);
-    EEPROM.commit();
+  }
+  else if (mode == "AP_MODE")
+  {
+    //Changing AP mode
+    timeout = 1;
+    wifiManager.resetSettings();
   }
   else
   {
-    //AP mode
-    wifiManager.resetSettings();  
+    //Show Configure WiFi screen
+    timeout = 180;
+    wifiManager.resetSettings();
   }
+
+  Serial.printf("WiFi connecting timeout = %lu\n", timeout);
 
   delay(200);
   wifiManager.setDebugOutput(true);
@@ -240,34 +251,18 @@ void initServer()
     request->send(LittleFS, "/settings.html", String(), false, processor);
   });
 
-  server.on(
-      "/APmode", HTTP_GET, [](AsyncWebServerRequest *request) {
-        Serial.println("[HTTP_GET] /APmode");
-        gMsgEventID = MSG_AP_ON;
-        request->send(LittleFS, "/settings.html", String(), false, processor);
-      },
-      NULL, NULL);
-
-  server.on(
-      "/STAmode", HTTP_GET, [](AsyncWebServerRequest *request) {
-        Serial.println("[HTTP_GET] /STAmode");
-        gMsgEventID = MSG_STA_ON;
-        request->send(LittleFS, "/settings.html", String(), false, processor);
-      },
-      NULL, NULL);
-
   //REST API
   //Start timer
   server.on("/start", HTTP_GET, [](AsyncWebServerRequest *request) {
     Serial.println("/start");
-    gMsgEventID = MSG_TIMER_START;
+    gMsgEventID = MSG_START_TIMER;
     request->send(LittleFS, "/index.html", String(), false, processor);
   });
 
   //Reset timer
   server.on("/reset", HTTP_GET, [](AsyncWebServerRequest *request) {
     Serial.println("/reset");
-    gMsgEventID = MSG_TIMER_RESET;
+    gMsgEventID = MSG_RESET_TIMER;
     request->send(LittleFS, "/index.html", String(), false, processor);
   });
 
@@ -361,12 +356,12 @@ void loop()
 
   switch (gMsgEventID)
   {
-  case MSG_TIMER_START:
+  case MSG_START_TIMER:
     countDown.attach_ms(1000, sendCountDownMsg, 0);
 
     gMsgEventID = MSG_NOTHING;
     break;
-  case MSG_TIMER_COUNTDOWN:
+  case MSG_COUNT_TIMER:
 
     nCount--;
 
@@ -386,27 +381,32 @@ void loop()
     }
     break;
   case MSG_SERVO_ON:
-    Serial.printf("RELEASE_TIME = %d[ms]\n", gRELEASE_TIME);
-    delay(gRELEASE_TIME); // wait from MSG_IGNAITER_ON
+  {
+    int release_time = doc["RELEASE_TIME"];
+    Serial.printf("RELEASE_TIME = %d[ms]\n", release_time);
+    delay(release_time); // wait from MSG_IGNAITER_ON
 
     //Serial.println("Servo ON!");
     myservo.write(150);
     delay(1000);
 
-    gMsgEventID = MSG_TIMER_RESET;
-    break;
+    gMsgEventID = MSG_RESET_TIMER;
+  }
+  break;
   case MSG_IGNAITER_ON:
-
-    Serial.printf("SPERK_TIME = %d[ms]\n", gSPERK_TIME);
+  {
+    int sperk_time = doc["SPERK_TIME"];
+    Serial.printf("SPERK_TIME = %d[ms]\n", sperk_time);
     Serial.println("Ignaiter ON!");
 
     digitalWrite(ledPin, HIGH);
-    delay(gSPERK_TIME);
+    delay(sperk_time);
     digitalWrite(ledPin, LOW);
     Serial.println("Ignaiter OFF!");
     gMsgEventID = MSG_SERVO_ON;
-    break;
-  case MSG_TIMER_RESET:
+  }
+  break;
+  case MSG_RESET_TIMER:
     Serial.println("Reset");
     countDown.detach();
     myservo.write(90);
@@ -416,28 +416,18 @@ void loop()
     events.send(p, "count");
     gMsgEventID = MSG_NOTHING;
     break;
-  case MSG_STA_ON:
-    Serial.println("Config Portal ON!");
-
-    EEPROM.put<unsigned long>(0, 255);
-    EEPROM.commit();
-
-    Serial.println("Reset ESP!");
-
-    gMsgEventID = MSG_ESP_RESET;
+  case MSG_STAMODE_ON:
+    Serial.println("STA mode ON!");
+    //SOMETHING TODO
+    gMsgEventID = MSG_RESET_ESP;
     break;
-  case MSG_AP_ON:
-    Serial.println("Shift AP mode.");
-
-    EEPROM.put<unsigned long>(0, 1);
-    EEPROM.commit();
-
-    Serial.println("Reset ESP!");
-
-    gMsgEventID = MSG_ESP_RESET;
-
+  case MSG_APMODE_ON:
+    Serial.println("AP mode ON!");
+    //SOMETHING TODO
+    gMsgEventID = MSG_RESET_ESP;
     break;
-  case MSG_ESP_RESET:
+  case MSG_RESET_ESP:
+    Serial.println("Reset ESP!");
     delay(5000);
     ESP.reset();
     break;
