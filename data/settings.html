@@ -27,7 +27,7 @@
       xhr.send(data);
     }
 
-    $(document).on('touchstart touchend', '#SUBMIT, #STA_MODE, #AP_MODE', function () {
+    $(document).on('touchstart', '#SUBMIT, #STA_MODE, #AP_MODE', function () {
       var url = "http://" + document.location.host + "/";
 
       var sID = $(this).attr('id');
@@ -68,9 +68,9 @@
   <div class="container">
     <button onclick="location.href='/'" id="SUBMIT" class="btn1 btn3">Set value</button>
     <p></p>
-    <button onclick="location.href='/'" id="STA_MODE" class="btn1 btn3">Start STA mode</button>
+    <button id="STA_MODE" class="btn1 btn3">Start STA mode</button>
     <p></p>
-    <button onclick="location.href='/'" id="AP_MODE" class="btn1 btn3">Start AP mode</button>
+    <button id="AP_MODE" class="btn1 btn3">Start AP mode</button>
   </div>
   <hr>
 </body>

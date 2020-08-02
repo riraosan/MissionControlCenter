@@ -63,11 +63,8 @@ Servo myservo;
 Ticker countDown;
 TelnetSpy SerialAndTelnet;
 
-//const char *settingsJson = "{\"MODE\":\"STA_MODE\",\"SPERK_TIME\":50,\"RELEASE_TIME\":10}";
-
 const size_t capacity = JSON_OBJECT_SIZE(3) + 40;
 DynamicJsonDocument doc(capacity);
-EepromStream settings(0, EEPROM_SIZE);
 
 #define Serial SerialAndTelnet
 
@@ -78,9 +75,8 @@ EepromStream settings(0, EEPROM_SIZE);
 #define MSG_COUNT_TIMER 0x03
 #define MSG_SERVO_ON 0x04
 #define MSG_IGNAITER_ON 0x05
-#define MSG_APMODE_ON 0x06
-#define MSG_STAMODE_ON 0x07
-#define MSG_SET_TIME 0x08
+#define MSB_CHANGE_MODE 0x06
+#define MSG_SET_TIME 0x07
 #define MSG_RESET_ESP 0xFF
 
 int gMsgEventID = MSG_NOTHING;
@@ -149,13 +145,8 @@ void onBody(AsyncWebServerRequest *request, uint8_t *data, size_t len, size_t in
     jsonBody += (char)data[i];
   }
 
-  Serial.println(jsonBody);
-
   //jsonBody to doc
   deserializeJson(doc, jsonBody);
-  //doc to settings(eeprom)
-  serializeJson(doc, settings);
-  settings.flush(); //write to eeprom
 
   String mode = String((const char *)doc["MODE"]);
   int SPERK_TIME = doc["SPERK_TIME"];
@@ -165,17 +156,13 @@ void onBody(AsyncWebServerRequest *request, uint8_t *data, size_t len, size_t in
   Serial.printf("SPERK_TIME = %d ", SPERK_TIME);
   Serial.printf("RELEASE_TIME = %d \n", RELEASE_TIME);
 
-  if (mode == "STA_MODE")
+  if (mode == "SUBMIT")
   {
-    SendMessage(MSG_STAMODE_ON);
-  }
-  else if (mode == "AP_MODE")
-  {
-    SendMessage(MSG_APMODE_ON);
+    SendMessage(MSG_SET_TIME);
   }
   else
   {
-    SendMessage(MSG_SET_TIME);
+    SendMessage(MSB_CHANGE_MODE);
   }
 }
 
@@ -190,7 +177,6 @@ void initPort()
 
 void initTelnet()
 {
-
   Serial.begin(MONITOR_SPEED);
   delay(500); // Wait for serial port
   Serial.setDebugOutput(false);
@@ -205,40 +191,57 @@ void initEEPROM()
 {
   Serial.println("Initializing EEPROM...");
   EEPROM.begin(EEPROM_SIZE);
+
+  EepromStream settings(0, EEPROM_SIZE / 2);
   //settings(eeprom) to doc
   deserializeJson(doc, settings);
+
+  // String mode = String((const char *)doc["MODE"]);
+  // int SPERK_TIME = doc["SPERK_TIME"];
+  // int RELEASE_TIME = doc["RELEASE_TIME"];
+
+  // Serial.printf("MODE = %s ", mode.c_str());
+  // Serial.printf("SPERK_TIME = %d ", SPERK_TIME);
+  // Serial.printf("RELEASE_TIME = %d \n", RELEASE_TIME);
 }
 
 void initWiFi()
 {
-  deserializeJson(doc, settings);
-  String mode = String((const char *)doc["MODE"]);
+  EepromStream settings(0, EEPROM_SIZE / 2);
 
   wifiManager.setDebugOutput(true);
+
+  String mode = String((const char *)doc["MODE"]);
   Serial.printf("MODE = %s\n", mode.c_str());
 
   if (mode == "STA_MODE")
   {
     wifiManager.setTimeout(180);
-    if(!wifiManager.startConfigPortal(AP_NAME))
+    wifiManager.resetSettings();
+    if (!wifiManager.startConfigPortal(AP_NAME))
     {
       wifiManager.autoConnect(AP_NAME);
     }
   }
   else if (mode == "AP_MODE")
   {
+    wifiManager.setTimeout(1);
+    wifiManager.resetSettings();
     wifiManager.autoConnect(AP_NAME);
   }
   else
   {
-    if(!wifiManager.startConfigPortal(AP_NAME))
+    wifiManager.setTimeout(180);
+    if (!wifiManager.startConfigPortal(AP_NAME))
     {
-      Serial.println("failed to connect, we should reset as see if it connects");
-      delay(3000);
-      ESP.reset();
-      delay(5000);
+      wifiManager.autoConnect(AP_NAME);
     }
   }
+
+  //SUBMIT
+  doc["MODE"] = "SUBMIT";
+  serializeJson(doc, settings);
+  settings.flush(); //write to eeprom
 }
 
 void initServer()
@@ -269,7 +272,7 @@ void initServer()
   server.on(
       "/", HTTP_POST, [](AsyncWebServerRequest *request) {
         Serial.println("[HTTP_POST] /");
-        request->send(LittleFS, "/index.html", String(), false, NULL);
+        //request->send(LittleFS, "/index.html", String(), false, NULL);
       },
       NULL, onBody);
 
@@ -365,7 +368,6 @@ void initLittleFS()
 
 void setup()
 {
-  delay(3000);
   initTelnet();
   initEEPROM();
   initWiFi();
@@ -386,14 +388,32 @@ void loop()
 
   switch (gMsgEventID)
   {
+  case MSB_CHANGE_MODE:
+  {
+    Serial.print("Change Mode to ");
+    Serial.println((const char *)doc["MODE"]);
+
+    EepromStream settings(0, EEPROM_SIZE / 2);
+    //doc to settings(eeprom)
+    serializeJson(doc, settings);
+    settings.flush(); //write to eeprom
+
+    Serial.println("Reset...");
+    SendMessage(MSG_RESET_ESP);
+  }
+  break;
   case MSG_SET_TIME:
-    Serial.println("Set time.");
+  {
+    Serial.println("Set times.");
+
+    EepromStream settings(0, EEPROM_SIZE / 2);
     //doc to settings(eeprom)
     serializeJson(doc, settings);
     settings.flush(); //write to eeprom
 
     SendMessage(MSG_NOTHING);
-    break;
+  }
+  break;
   case MSG_START_TIMER:
     countDown.attach_ms(1000, sendCountDownMsg, 0);
 
@@ -455,31 +475,14 @@ void loop()
     events.send(p, "count");
     SendMessage(MSG_NOTHING);
     break;
-  case MSG_STAMODE_ON:
-    Serial.print("Change to ");
-    Serial.println((const char *)doc["MODE"]);
-
-    //WiFi.persistent(false);
-    //WiFi.disconnect(false);
-
-    Serial.println("Reset...");
-    SendMessage(MSG_RESET_ESP);
-    break;
-  case MSG_APMODE_ON:
-    Serial.print("Change to ");
-    Serial.println((const char *)doc["MODE"]);
-
-    //WiFi.persistent(false);
-    //WiFi.disconnect(false);
-
-    Serial.println("Reset...");
-    SendMessage(MSG_RESET_ESP);
-    break;
   case MSG_RESET_ESP:
     delay(5000);
-    initWiFi(); 
-    SendMessage(MSG_NOTHING);
-    break;
+#if defined(ESP8266)
+    ESP.reset();
+#else
+    ESP.restart();
+#endif
+    delay(2000);
   default:
     //MSG_NOTHING
     break;
