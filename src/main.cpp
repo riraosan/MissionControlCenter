@@ -168,11 +168,8 @@ void onBody(AsyncWebServerRequest *request, uint8_t *data, size_t len, size_t in
 
 void initPort()
 {
-  myservo.attach(SERVO_NUM);
-  myservo.write(90);
-
-  pinMode(ledPin, OUTPUT);
-  digitalWrite(ledPin, LOW);
+  pinMode(SERVO_NUM, WAKEUP_PULLUP);
+  pinMode(ledPin, WAKEUP_PULLUP);
 }
 
 void initTelnet()
@@ -442,11 +439,17 @@ void loop()
   {
     int release_time = doc["RELEASE_TIME"];
     Serial.printf("RELEASE_TIME = %d[ms]\n", release_time);
+    
+    myservo.attach(SERVO_NUM);
+    myservo.write(90);
+
     delay(release_time); // wait from MSG_IGNAITER_ON
 
-    //Serial.println("Servo ON!");
+    Serial.println("Servo ON!");
     myservo.write(150);
     delay(1000);
+    myservo.detach();
+    pinMode(SERVO_NUM, WAKEUP_PULLUP);
 
     SendMessage(MSG_RESET_TIMER);
   }
@@ -456,11 +459,15 @@ void loop()
     int sperk_time = doc["SPERK_TIME"];
     Serial.printf("SPERK_TIME = %d[ms]\n", sperk_time);
     Serial.println("Ignaiter ON!");
-
+    
+    pinMode(ledPin, OUTPUT);
+    
     digitalWrite(ledPin, HIGH);
     delay(sperk_time);
     digitalWrite(ledPin, LOW);
     Serial.println("Ignaiter OFF!");
+
+    pinMode(ledPin, WAKEUP_PULLUP);
 
     SendMessage(MSG_SERVO_ON);
   }
@@ -468,7 +475,7 @@ void loop()
   case MSG_RESET_TIMER:
     Serial.println("Reset");
     countDown.detach();
-    myservo.write(90);
+    //myservo.write(90);
     nCount = 10;
 
     sprintf(p, "%d", nCount);
