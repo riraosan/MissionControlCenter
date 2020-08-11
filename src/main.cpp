@@ -46,18 +46,23 @@ SOFTWARE.
 #include <Ticker.h>
 #include <ArduinoJson.h>
 #include <StreamUtils.h>
+#include <RGBLed.h>
 
 AsyncWebServer server(80);
 AsyncDNSServer dns;
 AsyncWiFiManager wifiManager(&server, &dns);
 AsyncEventSource events("/events");
 
-static const int RELAY_NUM = 5;//relay GPIO
-static const int SERVO_NUM = 16;//servo GPIO
+static const int RELAY_NUM = 5;
+static const int SERVO_NUM = 16;
+static const int RED_PIN = 13;
+static const int GREEN_PIN = 12;
+static const int BLUE_PIN = 14;
 
 Servo myservo;
 Ticker countDown;
 TelnetSpy SerialAndTelnet;
+RGBLed led(RED_PIN, GREEN_PIN, BLUE_PIN, COMMON_ANODE);
 
 const size_t capacity = JSON_OBJECT_SIZE(3) + 40;
 DynamicJsonDocument doc(capacity);
@@ -162,15 +167,20 @@ void onBody(AsyncWebServerRequest *request, uint8_t *data, size_t len, size_t in
     }
 }
 
+void initLeds()
+{
+    analogWriteRange(255);
+    led.off();
+    led.fadeIn(RGBLed::RED, 5, 100);
+    led.fadeOut(RGBLed::RED, 5, 100);
+}
+
 void initPort()
 {
     pinMode(SERVO_NUM, INPUT_PULLUP);
     pinMode(RELAY_NUM, INPUT_PULLUP);
 
     //init open IO for anti-noise
-    pinMode(12, OUTPUT_OPEN_DRAIN);
-    pinMode(13, OUTPUT_OPEN_DRAIN);
-    pinMode(14, OUTPUT_OPEN_DRAIN);
     pinMode(4, OUTPUT_OPEN_DRAIN);
 }
 
@@ -352,6 +362,13 @@ void initOta()
     Serial.println(ArduinoOTA.getHostname() + ".local");
 
     ArduinoOTA.begin();
+
+    //led.setColor(RGBLed::GREEN);
+    led.flash(RGBLed::GREEN, 250, 100);
+    led.setColor(RGBLed::GREEN);
+    delay(1000);
+    led.fadeIn(RGBLed::GREEN, 5, 100);
+    led.fadeOut(RGBLed::GREEN, 5, 100);
 }
 
 void initLittleFS()
@@ -367,6 +384,7 @@ void initLittleFS()
 
 void setup()
 {
+    initLeds();
     initTelnet();
     initEEPROM();
     initWiFi();
