@@ -46,7 +46,7 @@ SOFTWARE.
 #include <Ticker.h>
 #include <ArduinoJson.h>
 #include <StreamUtils.h>
-#include <RGBLed.h>
+#include <ESPRGBLed.h>
 
 AsyncWebServer server(80);
 AsyncDNSServer dns;
@@ -61,6 +61,7 @@ static const int BLUE_PIN = 14;
 
 Servo myservo;
 Ticker countDown;
+Ticker mode;
 TelnetSpy SerialAndTelnet;
 RGBLed led(RED_PIN, GREEN_PIN, BLUE_PIN, COMMON_ANODE);
 
@@ -76,8 +77,11 @@ DynamicJsonDocument doc(capacity);
 #define MSG_COUNT_TIMER 0x03
 #define MSG_SERVO_ON 0x04
 #define MSG_IGNAITER_ON 0x05
-#define MSB_CHANGE_MODE 0x06
+#define MSG_CHANGE_MODE 0x06
 #define MSG_SET_TIME 0x07
+#define MSG_ENTER_SETTING 0x08
+#define MSG_ENTER_MAIN 0x09
+#define MSG_BLYNK_LED 0x10
 #define MSG_RESET_ESP 0xFF
 
 int gMsgEventID = MSG_NOTHING;
@@ -110,16 +114,27 @@ String processor(const String &var)
 void telnetConnected()
 {
     Serial.println("Telnet connection established.");
+    led.flash(RGBLed::BLUE, 100);
 }
 
 void telnetDisconnected()
 {
     Serial.println("Telnet connection closed.");
+
+    for (int i = 0; i < 3; i++)
+    {
+        led.flash(RGBLed::BLUE, 100);
+    }
 }
 
 void sendCountDownMsg(int state)
 {
-    gMsgEventID = MSG_COUNT_TIMER;
+    SendMessage(MSG_COUNT_TIMER);
+}
+
+void blynkModeLed(int state)
+{
+    SendMessage(MSG_BLYNK_LED);
 }
 
 void onRequest(AsyncWebServerRequest *request)
@@ -163,29 +178,56 @@ void onBody(AsyncWebServerRequest *request, uint8_t *data, size_t len, size_t in
     }
     else
     {
-        SendMessage(MSB_CHANGE_MODE);
+        SendMessage(MSG_CHANGE_MODE);
     }
 }
 
 void initLeds()
 {
-    analogWriteRange(255);
+    Serial.println("Initializing RGB Led...");
+
+    led.brightness(RGBLed::RED, 100);
+    delay(1000);
+    led.brightness(RGBLed::GREEN, 100);
+    delay(1000);
+    led.brightness(RGBLed::BLUE, 100);
+    delay(1000);
     led.off();
-    led.fadeIn(RGBLed::RED, 5, 100);
-    led.fadeOut(RGBLed::RED, 5, 100);
+}
+
+//for anti-sperking-noise
+void closeLedPort()
+{
+    pinMode(RED_PIN, OUTPUT_OPEN_DRAIN);
+    pinMode(GREEN_PIN, OUTPUT_OPEN_DRAIN);
+    pinMode(BLUE_PIN, OUTPUT_OPEN_DRAIN);
+}
+//to normal
+void openLedPort()
+{
+    pinMode(RED_PIN, OUTPUT);
+    pinMode(GREEN_PIN, OUTPUT);
+    pinMode(BLUE_PIN, OUTPUT);
 }
 
 void initPort()
 {
+    Serial.println("Initializing Ports...");
+
     pinMode(SERVO_NUM, INPUT_PULLUP);
     pinMode(RELAY_NUM, INPUT_PULLUP);
 
     //init open IO for anti-noise
     pinMode(4, OUTPUT_OPEN_DRAIN);
+    pinMode(16, OUTPUT_OPEN_DRAIN);
+    pinMode(1, OUTPUT_OPEN_DRAIN);
+    pinMode(3, OUTPUT_OPEN_DRAIN);
 }
 
 void initTelnet()
 {
+    Serial.println("Initializing Telnet...");
+
     Serial.begin(MONITOR_SPEED);
     delay(500); // Wait for serial port
     Serial.setDebugOutput(false);
@@ -202,16 +244,9 @@ void initEEPROM()
     EEPROM.begin(EEPROM_SIZE);
 
     EepromStream settings(0, EEPROM_SIZE / 2);
+
     //settings(eeprom) to doc
     deserializeJson(doc, settings);
-
-    // String mode = String((const char *)doc["MODE"]);
-    // int SPERK_TIME = doc["SPERK_TIME"];
-    // int RELEASE_TIME = doc["RELEASE_TIME"];
-
-    // Serial.printf("MODE = %s ", mode.c_str());
-    // Serial.printf("SPERK_TIME = %d ", SPERK_TIME);
-    // Serial.printf("RELEASE_TIME = %d \n", RELEASE_TIME);
 }
 
 void initWiFi()
@@ -225,6 +260,9 @@ void initWiFi()
 
     if (mode == "STA_MODE")
     {
+        led.flash(RGBLed::BLUE, 100);
+        led.setColor(RGBLed::BLUE);
+
         wifiManager.setTimeout(180);
         wifiManager.resetSettings();
         if (!wifiManager.startConfigPortal(AP_NAME))
@@ -234,6 +272,9 @@ void initWiFi()
     }
     else if (mode == "AP_MODE")
     {
+        led.flash(RGBLed::RED, 100);
+        led.setColor(RGBLed::RED);
+
         wifiManager.setTimeout(1);
         wifiManager.resetSettings();
         wifiManager.autoConnect(AP_NAME);
@@ -245,12 +286,16 @@ void initWiFi()
         {
             wifiManager.autoConnect(AP_NAME);
         }
+        led.flash(RGBLed::GREEN, 100);
+        led.setColor(RGBLed::GREEN);
     }
 
     //SUBMIT
     doc["MODE"] = "SUBMIT";
     serializeJson(doc, settings);
     settings.flush(); //write to eeprom
+
+    Serial.println("WiFi Started");
 }
 
 void initServer()
@@ -259,29 +304,29 @@ void initServer()
     server.on("/style.css", HTTP_GET, [](AsyncWebServerRequest *request) {
         Serial.println("Route to load style.css file");
         request->send(LittleFS, "/style.css", "text/css");
-        });
+    });
 
     server.on("/jquery-3.5.1.slim.min.js", HTTP_GET, [](AsyncWebServerRequest *request) {
         Serial.println("Route to load jquery-3.5.1.slim.min.js file");
         request->send(LittleFS, "/jquery-3.5.1.slim.min.js", "text/javascript");
-        });
+    });
 
     // Route to load favicon.ico file
     server.on("/favicon.ico", HTTP_GET, [](AsyncWebServerRequest *request) {
         Serial.println("Route to load favicon.ico file");
         request->send(LittleFS, "/favicon.ico", "icon");
-        });
+    });
 
     // Route for root / web page
     server.on("/", HTTP_GET, [](AsyncWebServerRequest *request) {
         Serial.println("[HTTP_GET] /");
         request->send(LittleFS, "/index.html", String(), false, processor);
-        });
+        SendMessage(MSG_ENTER_MAIN);
+    });
 
     server.on(
         "/", HTTP_POST, [](AsyncWebServerRequest *request) {
             Serial.println("[HTTP_POST] /");
-            //request->send(LittleFS, "/index.html", String(), false, NULL);
         },
         NULL, onBody);
 
@@ -289,26 +334,27 @@ void initServer()
     server.on("/settings", HTTP_GET, [](AsyncWebServerRequest *request) {
         Serial.println("[HTTP_GET] /settings");
         request->send(LittleFS, "/settings.html", String(), false, processor);
-        });
+        SendMessage(MSG_ENTER_SETTING);
+    });
 
     //REST API
     //Start timer
     server.on("/start", HTTP_GET, [](AsyncWebServerRequest *request) {
         Serial.println("/start");
-        gMsgEventID = MSG_START_TIMER;
         request->send(LittleFS, "/index.html", String(), false, processor);
-        });
+        SendMessage(MSG_START_TIMER);
+    });
 
     //Reset timer
     server.on("/reset", HTTP_GET, [](AsyncWebServerRequest *request) {
         Serial.println("/reset");
-        gMsgEventID = MSG_RESET_TIMER;
         request->send(LittleFS, "/index.html", String(), false, processor);
-        });
+        SendMessage(MSG_RESET_TIMER);
+    });
 
     events.onConnect([](AsyncEventSourceClient *client) {
         client->send("10", NULL, millis(), 1000);
-        });
+    });
 
     server.addHandler(&events);
 
@@ -320,6 +366,8 @@ void initServer()
 
     server.begin();
     Serial.println("Server Started");
+
+    led.flash(RGBLed::BLUE, 500);
 }
 
 void initOta()
@@ -332,15 +380,15 @@ void initOta()
             type = "filesystem";
 
         Serial.println("Start updating " + type);
-        });
+    });
 
     ArduinoOTA.onEnd([]() {
         Serial.println("\nEnd");
-        });
+    });
 
     ArduinoOTA.onProgress([](unsigned int progress, unsigned int total) {
         Serial.printf("Progress: %u%%\r", (progress / (total / 100)));
-        });
+    });
 
     ArduinoOTA.onError([](ota_error_t error) {
         Serial.printf("Error[%u]: ", error);
@@ -354,7 +402,7 @@ void initOta()
             Serial.println("Receive Failed");
         else if (error == OTA_END_ERROR)
             Serial.println("End Failed");
-        });
+    });
 
     ArduinoOTA.setHostname(HOSTNAME);
 
@@ -362,13 +410,11 @@ void initOta()
     Serial.println(ArduinoOTA.getHostname() + ".local");
 
     ArduinoOTA.begin();
+    Serial.println("OTA Started");
 
-    //led.setColor(RGBLed::GREEN);
-    led.flash(RGBLed::GREEN, 250, 100);
     led.setColor(RGBLed::GREEN);
-    delay(1000);
-    led.fadeIn(RGBLed::GREEN, 5, 100);
     led.fadeOut(RGBLed::GREEN, 5, 100);
+    led.fadeIn(RGBLed::GREEN, 5, 100);
 }
 
 void initLittleFS()
@@ -397,7 +443,7 @@ void setup()
 //Event Message Loop
 void loop()
 {
-    char p[32] ={ 0 };
+    char p[32] = {0};
     static int nCount = 10;
 
     SerialAndTelnet.handle();
@@ -405,7 +451,20 @@ void loop()
 
     switch (gMsgEventID)
     {
-    case MSB_CHANGE_MODE:
+    case MSG_BLYNK_LED:
+        led.flash(RGBLed::GREEN, 500);
+        SendMessage(MSG_NOTHING);
+        break;
+    case MSG_ENTER_MAIN:
+        mode.detach();
+        led.setColor(RGBLed::GREEN);
+        SendMessage(MSG_NOTHING);
+        break;
+    case MSG_ENTER_SETTING:
+        mode.attach_ms(1000, blynkModeLed, 0);
+        SendMessage(MSG_NOTHING);
+        break;
+    case MSG_CHANGE_MODE:
     {
         Serial.print("Change Mode to ");
         Serial.println((const char *)doc["MODE"]);
@@ -453,6 +512,7 @@ void loop()
         else
         {
             SendMessage(MSG_NOTHING);
+            led.flash(RGBLed::GREEN, 100);
         }
         break;
     case MSG_SERVO_ON:
@@ -476,13 +536,21 @@ void loop()
     break;
     case MSG_IGNAITER_ON:
     {
+        for (int i = 0; i < 5; i++)
+        {
+            led.flash(RGBLed::RED, 100);
+        }
+
+        closeLedPort();
+        delay(100);
+
         int sperk_time = doc["SPERK_TIME"];
         Serial.printf("SPERK_TIME = %d[ms]\n", sperk_time);
-        Serial.println("Ignaiter ON!");
 
         pinMode(RELAY_NUM, OUTPUT);
 
         digitalWrite(RELAY_NUM, HIGH);
+        Serial.println("Ignaiter ON!");
         delay(sperk_time);
         digitalWrite(RELAY_NUM, LOW);
         Serial.println("Ignaiter OFF!");
@@ -495,20 +563,29 @@ void loop()
     case MSG_RESET_TIMER:
         Serial.println("Reset");
         countDown.detach();
-        //myservo.write(90);
+
         nCount = 10;
 
         sprintf(p, "%d", nCount);
         events.send(p, "count");
+
+        openLedPort();
+        delay(100);
+
+        led.flash(RGBLed::GREEN, 100);
+        led.flash(RGBLed::GREEN, 100);
+
         SendMessage(MSG_NOTHING);
         break;
     case MSG_RESET_ESP:
+        led.flash(RGBLed::BLUE, 100);
+        led.flash(RGBLed::BLUE, 100);
         delay(5000);
-        #if defined(ESP8266)
+#if defined(ESP8266)
         ESP.reset();
-        #else
+#else
         ESP.restart();
-        #endif
+#endif
         delay(2000);
     default:
         //MSG_NOTHING
