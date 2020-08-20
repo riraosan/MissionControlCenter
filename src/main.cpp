@@ -23,22 +23,26 @@ SOFTWARE.
 */
 
 #include <ArduinoOTA.h>
-#ifdef ESP32
-#define HOSTNAME "esp32"
+#if defined(ESP32)
+#include <SPIFFS.h>
+#include <DNSServer.h>
 #define MONITOR_SPEED 115200
 #define AP_NAME "ESP32-G-AP"
 #define EEPROM_SIZE 512
+#define _FS SPIFFS
 #elif defined(ESP8266)
 #include <LittleFS.h>
 #include <ESP8266WiFi.h>
-#define HOSTNAME "esp8266"
+#include <ESPAsyncDNSServer.h>
 #define MONITOR_SPEED 74880
 #define AP_NAME "ESP8266-G-AP"
 #define EEPROM_SIZE 512
+#define _FS LittleFS
 #endif
 
+#define HOSTNAME "esp"
+
 #include <ESPAsyncWebServer.h>
-#include <ESPAsyncDNSServer.h>
 #include <ESPAsyncWiFiManager.h>
 #include <TelnetSpy.h>
 #include <Servo.h>
@@ -46,10 +50,13 @@ SOFTWARE.
 #include <Ticker.h>
 #include <ArduinoJson.h>
 #include <StreamUtils.h>
-#include <ESPRGBLed.h>
 
 AsyncWebServer server(80);
+#if defined(ESP32)
+DNSServer dns;
+#elif defined(ESP8266)
 AsyncDNSServer dns;
+#endif
 AsyncWiFiManager wifiManager(&server, &dns);
 AsyncEventSource events("/events");
 
@@ -63,7 +70,6 @@ Servo myservo;
 Ticker countDown;
 Ticker mode;
 TelnetSpy SerialAndTelnet;
-RGBLed led(RED_PIN, GREEN_PIN, BLUE_PIN, COMMON_ANODE);
 
 const size_t capacity = JSON_OBJECT_SIZE(3) + 40;
 DynamicJsonDocument doc(capacity);
@@ -114,17 +120,11 @@ String processor(const String &var)
 void telnetConnected()
 {
     Serial.println("Telnet connection established.");
-    led.flash(RGBLed::BLUE, 100);
 }
 
 void telnetDisconnected()
 {
     Serial.println("Telnet connection closed.");
-
-    for (int i = 0; i < 3; i++)
-    {
-        led.flash(RGBLed::BLUE, 100);
-    }
 }
 
 void sendCountDownMsg(int state)
@@ -185,14 +185,6 @@ void onBody(AsyncWebServerRequest *request, uint8_t *data, size_t len, size_t in
 void initLeds()
 {
     Serial.println("Initializing RGB Led...");
-
-    led.brightness(RGBLed::RED, 100);
-    delay(1000);
-    led.brightness(RGBLed::GREEN, 100);
-    delay(1000);
-    led.brightness(RGBLed::BLUE, 100);
-    delay(1000);
-    led.off();
 }
 
 //for anti-sperking-noise
@@ -222,6 +214,9 @@ void initPort()
     pinMode(16, OUTPUT_OPEN_DRAIN);
     pinMode(1, OUTPUT_OPEN_DRAIN);
     pinMode(3, OUTPUT_OPEN_DRAIN);
+    pinMode(RED_PIN, OUTPUT_OPEN_DRAIN);
+    pinMode(GREEN_PIN, OUTPUT_OPEN_DRAIN);
+    pinMode(BLUE_PIN, OUTPUT_OPEN_DRAIN);
 }
 
 void initTelnet()
@@ -260,9 +255,6 @@ void initWiFi()
 
     if (mode == "STA_MODE")
     {
-        led.flash(RGBLed::BLUE, 100);
-        led.setColor(RGBLed::BLUE);
-
         wifiManager.setTimeout(180);
         wifiManager.resetSettings();
         if (!wifiManager.startConfigPortal(AP_NAME))
@@ -272,9 +264,6 @@ void initWiFi()
     }
     else if (mode == "AP_MODE")
     {
-        led.flash(RGBLed::RED, 100);
-        led.setColor(RGBLed::RED);
-
         wifiManager.setTimeout(1);
         wifiManager.resetSettings();
         wifiManager.autoConnect(AP_NAME);
@@ -286,8 +275,6 @@ void initWiFi()
         {
             wifiManager.autoConnect(AP_NAME);
         }
-        led.flash(RGBLed::GREEN, 100);
-        led.setColor(RGBLed::GREEN);
     }
 
     //SUBMIT
@@ -303,24 +290,24 @@ void initServer()
     // Route to load style.css file
     server.on("/style.css", HTTP_GET, [](AsyncWebServerRequest *request) {
         Serial.println("Route to load style.css file");
-        request->send(LittleFS, "/style.css", "text/css");
+        request->send(_FS, "/style.css", "text/css");
     });
 
     server.on("/jquery-3.5.1.slim.min.js", HTTP_GET, [](AsyncWebServerRequest *request) {
         Serial.println("Route to load jquery-3.5.1.slim.min.js file");
-        request->send(LittleFS, "/jquery-3.5.1.slim.min.js", "text/javascript");
+        request->send(_FS, "/jquery-3.5.1.slim.min.js", "text/javascript");
     });
 
     // Route to load favicon.ico file
     server.on("/favicon.ico", HTTP_GET, [](AsyncWebServerRequest *request) {
         Serial.println("Route to load favicon.ico file");
-        request->send(LittleFS, "/favicon.ico", "icon");
+        request->send(_FS, "/favicon.ico", "icon");
     });
 
     // Route for root / web page
     server.on("/", HTTP_GET, [](AsyncWebServerRequest *request) {
         Serial.println("[HTTP_GET] /");
-        request->send(LittleFS, "/index.html", String(), false, processor);
+        request->send(_FS, "/index.html", String(), false, processor);
         SendMessage(MSG_ENTER_MAIN);
     });
 
@@ -333,7 +320,7 @@ void initServer()
     // Route for /settings web page
     server.on("/settings", HTTP_GET, [](AsyncWebServerRequest *request) {
         Serial.println("[HTTP_GET] /settings");
-        request->send(LittleFS, "/settings.html", String(), false, processor);
+        request->send(_FS, "/settings.html", String(), false, processor);
         SendMessage(MSG_ENTER_SETTING);
     });
 
@@ -341,14 +328,14 @@ void initServer()
     //Start timer
     server.on("/start", HTTP_GET, [](AsyncWebServerRequest *request) {
         Serial.println("/start");
-        request->send(LittleFS, "/index.html", String(), false, processor);
+        request->send(_FS, "/index.html", String(), false, processor);
         SendMessage(MSG_START_TIMER);
     });
 
     //Reset timer
     server.on("/reset", HTTP_GET, [](AsyncWebServerRequest *request) {
         Serial.println("/reset");
-        request->send(LittleFS, "/index.html", String(), false, processor);
+        request->send(_FS, "/index.html", String(), false, processor);
         SendMessage(MSG_RESET_TIMER);
     });
 
@@ -366,8 +353,6 @@ void initServer()
 
     server.begin();
     Serial.println("Server Started");
-
-    led.flash(RGBLed::BLUE, 500);
 }
 
 void initOta()
@@ -411,30 +396,26 @@ void initOta()
 
     ArduinoOTA.begin();
     Serial.println("OTA Started");
-
-    led.setColor(RGBLed::GREEN);
-    led.fadeOut(RGBLed::GREEN, 5, 100);
-    led.fadeIn(RGBLed::GREEN, 5, 100);
 }
 
-void initLittleFS()
+void initFS()
 {
-    // Initialize LittleFS
-    Serial.println("Mounting LittleFS...");
-    if (!LittleFS.begin())
+    // Initialize FS
+    Serial.println("Mounting FS...");
+    if (!_FS.begin())
     {
-        Serial.println("An Error has occurred while mounting LittleFS");
+        Serial.println("An Error has occurred while mounting FS");
         return;
     }
 }
 
 void setup()
 {
-    initLeds();
+    //initLeds();
     initTelnet();
     initEEPROM();
     initWiFi();
-    initLittleFS();
+    initFS();
     initPort();
     initServer();
     initOta();
@@ -452,12 +433,10 @@ void loop()
     switch (gMsgEventID)
     {
     case MSG_BLYNK_LED:
-        led.flash(RGBLed::GREEN, 500);
         SendMessage(MSG_NOTHING);
         break;
     case MSG_ENTER_MAIN:
         mode.detach();
-        led.setColor(RGBLed::GREEN);
         SendMessage(MSG_NOTHING);
         break;
     case MSG_ENTER_SETTING:
@@ -512,7 +491,6 @@ void loop()
         else
         {
             SendMessage(MSG_NOTHING);
-            led.flash(RGBLed::GREEN, 100);
         }
         break;
     case MSG_SERVO_ON:
@@ -536,14 +514,6 @@ void loop()
     break;
     case MSG_IGNAITER_ON:
     {
-        for (int i = 0; i < 5; i++)
-        {
-            led.flash(RGBLed::RED, 100);
-        }
-
-        closeLedPort();
-        delay(100);
-
         int sperk_time = doc["SPERK_TIME"];
         Serial.printf("SPERK_TIME = %d[ms]\n", sperk_time);
 
@@ -569,17 +539,9 @@ void loop()
         sprintf(p, "%d", nCount);
         events.send(p, "count");
 
-        openLedPort();
-        delay(100);
-
-        led.flash(RGBLed::GREEN, 100);
-        led.flash(RGBLed::GREEN, 100);
-
         SendMessage(MSG_NOTHING);
         break;
     case MSG_RESET_ESP:
-        led.flash(RGBLed::BLUE, 100);
-        led.flash(RGBLed::BLUE, 100);
         delay(5000);
 #if defined(ESP8266)
         ESP.reset();
