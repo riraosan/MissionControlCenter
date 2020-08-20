@@ -19,6 +19,7 @@
         "type_traits": "cpp",
         "utility": "cpp",
         "*.tcc": "cpp",
-        "ostream": "cpp"
+        "ostream": "cpp",
+        "unordered_set": "cpp"
     }
 }

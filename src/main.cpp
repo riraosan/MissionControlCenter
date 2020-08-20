@@ -231,6 +231,7 @@ void initTelnet()
     SerialAndTelnet.setWelcomeMsg("Welcome to ESP Terminal.\n");
     SerialAndTelnet.setCallbackOnConnect(telnetConnected);
     SerialAndTelnet.setCallbackOnDisconnect(telnetDisconnected);
+    Serial.println("log ================================================");
 }
 
 void initEEPROM()
@@ -249,7 +250,7 @@ void initWiFi()
     EepromStream settings(0, EEPROM_SIZE / 2);
 
     wifiManager.setDebugOutput(true);
-
+/*
     String mode = String((const char *)doc["MODE"]);
     Serial.printf("MODE = %s\n", mode.c_str());
 
@@ -283,6 +284,7 @@ void initWiFi()
     settings.flush(); //write to eeprom
 
     Serial.println("WiFi Started");
+    */
 }
 
 void initServer()
@@ -414,11 +416,11 @@ void setup()
     //initLeds();
     initTelnet();
     initEEPROM();
-    initWiFi();
+    //initWiFi();
     initFS();
-    initPort();
-    initServer();
-    initOta();
+    //initPort();
+    //initServer();
+    //initOta();
 }
 
 //Event Message Loop
