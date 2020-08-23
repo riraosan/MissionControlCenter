@@ -24,6 +24,7 @@ SOFTWARE.
 
 #include <ArduinoOTA.h>
 #if defined(ESP32)
+#include <WiFi.h>
 #include <SPIFFS.h>
 #include <DNSServer.h>
 #define MONITOR_SPEED 115200
@@ -31,8 +32,8 @@ SOFTWARE.
 #define EEPROM_SIZE 512
 #define _FS SPIFFS
 #elif defined(ESP8266)
-#include <LittleFS.h>
 #include <ESP8266WiFi.h>
+#include <LittleFS.h>
 #include <ESPAsyncDNSServer.h>
 #define MONITOR_SPEED 74880
 #define AP_NAME "ESP8266-G-AP"
@@ -71,7 +72,7 @@ Ticker countDown;
 Ticker mode;
 TelnetSpy SerialAndTelnet;
 
-const size_t capacity = JSON_OBJECT_SIZE(3) + 40;
+const size_t capacity = JSON_OBJECT_SIZE(3) + 50;
 DynamicJsonDocument doc(capacity);
 
 #define Serial SerialAndTelnet
@@ -210,13 +211,13 @@ void initPort()
     pinMode(RELAY_NUM, INPUT_PULLUP);
 
     //init open IO for anti-noise
-    pinMode(4, OUTPUT_OPEN_DRAIN);
-    pinMode(16, OUTPUT_OPEN_DRAIN);
-    pinMode(1, OUTPUT_OPEN_DRAIN);
-    pinMode(3, OUTPUT_OPEN_DRAIN);
-    pinMode(RED_PIN, OUTPUT_OPEN_DRAIN);
-    pinMode(GREEN_PIN, OUTPUT_OPEN_DRAIN);
-    pinMode(BLUE_PIN, OUTPUT_OPEN_DRAIN);
+    //pinMode(4, OUTPUT_OPEN_DRAIN);
+    //pinMode(16, OUTPUT_OPEN_DRAIN);
+    //pinMode(1, OUTPUT_OPEN_DRAIN);
+    //pinMode(3, OUTPUT_OPEN_DRAIN);
+    //pinMode(RED_PIN, OUTPUT_OPEN_DRAIN);
+    //pinMode(GREEN_PIN, OUTPUT_OPEN_DRAIN);
+    //pinMode(BLUE_PIN, OUTPUT_OPEN_DRAIN);
 }
 
 void initTelnet()
@@ -228,7 +229,7 @@ void initTelnet()
     Serial.setDebugOutput(false);
     delay(1000);
 
-    SerialAndTelnet.setWelcomeMsg("Welcome to ESP Terminal.\n");
+    SerialAndTelnet.setWelcomeMsg((char *)"Welcome to ESP Terminal.\n");
     SerialAndTelnet.setCallbackOnConnect(telnetConnected);
     SerialAndTelnet.setCallbackOnDisconnect(telnetDisconnected);
     Serial.println("log ================================================");
@@ -243,6 +244,27 @@ void initEEPROM()
 
     //settings(eeprom) to doc
     deserializeJson(doc, settings);
+
+    if (doc.isNull() == true)
+    {
+        Serial.println("doc is null");
+
+        const char *json = "{\"MODE\":\"STA_MODE\",\"SPERK_TIME\":50,\"RELEASE_TIME\":10}";
+        deserializeJson(doc, json);
+    }
+}
+
+void configModeCallback(AsyncWiFiManager *myWiFiManager)
+{
+    Serial.println("Entered config mode");
+    Serial.println(WiFi.softAPIP());
+    //if you used auto generated SSID, print it
+    Serial.println(myWiFiManager->getConfigPortalSSID());
+}
+
+void saveConfigCallback()
+{
+    Serial.println("Should save config");
 }
 
 void initWiFi()
@@ -250,14 +272,15 @@ void initWiFi()
     EepromStream settings(0, EEPROM_SIZE / 2);
 
     wifiManager.setDebugOutput(true);
-/*
+    wifiManager.setAPCallback(configModeCallback);
+    wifiManager.setSaveConfigCallback(saveConfigCallback);
+
     String mode = String((const char *)doc["MODE"]);
     Serial.printf("MODE = %s\n", mode.c_str());
 
     if (mode == "STA_MODE")
     {
-        wifiManager.setTimeout(180);
-        wifiManager.resetSettings();
+        wifiManager.setTryConnectDuringConfigPortal(false);
         if (!wifiManager.startConfigPortal(AP_NAME))
         {
             wifiManager.autoConnect(AP_NAME);
@@ -265,13 +288,12 @@ void initWiFi()
     }
     else if (mode == "AP_MODE")
     {
-        wifiManager.setTimeout(1);
-        wifiManager.resetSettings();
-        wifiManager.autoConnect(AP_NAME);
+        wifiManager.setConfigPortalTimeout(1);
+        wifiManager.setTryConnectDuringConfigPortal(false);
+        wifiManager.startConfigPortal(AP_NAME);
     }
     else
     {
-        wifiManager.setTimeout(180);
         if (!wifiManager.startConfigPortal(AP_NAME))
         {
             wifiManager.autoConnect(AP_NAME);
@@ -284,7 +306,6 @@ void initWiFi()
     settings.flush(); //write to eeprom
 
     Serial.println("WiFi Started");
-    */
 }
 
 void initServer()
@@ -295,9 +316,9 @@ void initServer()
         request->send(_FS, "/style.css", "text/css");
     });
 
-    server.on("/jquery-3.5.1.slim.min.js", HTTP_GET, [](AsyncWebServerRequest *request) {
-        Serial.println("Route to load jquery-3.5.1.slim.min.js file");
-        request->send(_FS, "/jquery-3.5.1.slim.min.js", "text/javascript");
+    server.on("/jquery-3.5.1.min.js", HTTP_GET, [](AsyncWebServerRequest *request) {
+        Serial.println("Route to load jquery-3.5.1.min.js file");
+        request->send(_FS, "/jquery-3.5.1.min.js", "text/javascript");
     });
 
     // Route to load favicon.ico file
@@ -313,11 +334,10 @@ void initServer()
         SendMessage(MSG_ENTER_MAIN);
     });
 
-    server.on(
-        "/", HTTP_POST, [](AsyncWebServerRequest *request) {
-            Serial.println("[HTTP_POST] /");
-        },
-        NULL, onBody);
+    server.on("/", HTTP_POST, [](AsyncWebServerRequest *request) {
+        Serial.println("[HTTP_POST] /");
+        request->send(200);
+    }, NULL, onBody);
 
     // Route for /settings web page
     server.on("/settings", HTTP_GET, [](AsyncWebServerRequest *request) {
@@ -416,11 +436,11 @@ void setup()
     //initLeds();
     initTelnet();
     initEEPROM();
-    //initWiFi();
+    initWiFi();
     initFS();
-    //initPort();
-    //initServer();
-    //initOta();
+    initPort();
+    initServer();
+    initOta();
 }
 
 //Event Message Loop

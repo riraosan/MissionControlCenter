@@ -8,26 +8,10 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
   <meta http-equiv="content-type" charset="utf-8">
 
-  <script type="text/javascript" src="jquery-3.5.1.slim.min.js"></script>
+  <script type="text/javascript" src="jquery-3.5.1.min.js"></script>
 
   <script type="text/javascript">
-    function doPost(url, data) {
-      console.log(url);
-      var xhr = new XMLHttpRequest();
-      xhr.open("POST", url);
-      xhr.setRequestHeader("Content-Type", "application/json");
-      xhr.onload = () => {
-        console.log(xhr.status);
-        console.log("success!");
-      };
-      xhr.onerror = () => {
-        console.log(xhr.status);
-        console.log("error!");
-      };
-      xhr.send(data);
-    }
-
-    $(document).on('touchstart', '#SUBMIT, #STA_MODE, #AP_MODE', function () {
+    $(document).on('click', '#SUBMIT, #STA_MODE, #AP_MODE', function () {
       var url = "http://" + document.location.host + "/";
 
       var sID = $(this).attr('id');
@@ -40,9 +24,24 @@
 
       console.log(JSONdata);
 
-      doPost(url, JSON.stringify(JSONdata));
-
-    })
+      $.ajax({
+        type: "post",
+        url: url,
+        data: JSON.stringify(JSONdata),
+        contentType: 'application/json',
+        dataType: 'json',
+        success: function (data) {
+          //成功時処理
+          console.log("success");
+          window.location.href = url;
+        },
+        error: function (data) {
+          //失敗時処理
+          console.log("error");
+          window.location.href = url;
+        }
+      });
+    });
   </script>
 
 </head>
@@ -66,7 +65,7 @@
   </table>
   <p></p>
   <div class="container">
-    <button onclick="location.href='/'" id="SUBMIT" class="btn1 btn3">Set value</button>
+    <button id="SUBMIT" class="btn1 btn3">Set value</button>
     <p></p>
     <button id="STA_MODE" class="btn1 btn3">Start STA mode</button>
     <p></p>
