@@ -8,7 +8,7 @@
 
 ## 要件
 
-##　インストール
+## インストール
 
 ```
 $ git clone https://github.com/riraosan/MissionControlCenter.git
