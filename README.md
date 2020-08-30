@@ -1,23 +1,21 @@
 # Mission Controller
 
-# Overview
+# 概要
 
-## Description
+## 説明
 
-## Demo
+## デモ
 
-## Requirement
+## 要件
 
-## Usage
+## 使用方法
 
-## Install
+## ビルド方法
 
-## Contribution
-
-## Licence
+## ライセンス
 
 [MIT](https://github.com/tcnksm/tool/blob/master/LICENCE)
 
-## Author
+## 著者
 
 [rirao](https://github.com/riraosan)
