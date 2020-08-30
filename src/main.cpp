@@ -61,7 +61,7 @@ AsyncDNSServer dns;
 AsyncWiFiManager wifiManager(&server, &dns);
 AsyncEventSource events("/events");
 
-static const int RELAY_NUM = 5;
+static const int RELAY_NUM = 15;
 static const int SERVO_NUM = 16;
 static const int RED_PIN = 13;
 static const int GREEN_PIN = 12;
