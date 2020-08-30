@@ -1,5 +1,5 @@
 # Mission Controller
-====
+---
 
 Overview
 
