@@ -10,7 +10,9 @@
 
 ##　インストール
 
+```
 $ git clone https://github.com/riraosan/MissionControlCenter.git
+```
 
 ## 使用方法
 
@@ -18,7 +20,7 @@ $ git clone https://github.com/riraosan/MissionControlCenter.git
 
 ## ライセンス
 
-[MIT](https://github.com/tcnksm/tool/blob/master/LICENCE)
+[MIT](https://github.com/riraosan/MissionControlCenter/blob/master/LICENSE)
 
 ## 著者
 
