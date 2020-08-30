@@ -1,13 +1,10 @@
 # Mission Controller
----
 
-Overview
+# Overview
 
 ## Description
 
 ## Demo
-
-## VS. 
 
 ## Requirement
 
