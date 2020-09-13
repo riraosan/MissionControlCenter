@@ -77,18 +77,19 @@ DynamicJsonDocument doc(capacity);
 
 #define Serial SerialAndTelnet
 
-//Message Name
+//Event ID
 #define MSG_NOTHING 0x00
 #define MSG_START_TIMER 0x01
 #define MSG_RESET_TIMER 0x02
 #define MSG_COUNT_TIMER 0x03
 #define MSG_SERVO_ON 0x04
 #define MSG_IGNAITER_ON 0x05
-#define MSG_CHANGE_MODE 0x06
-#define MSG_SET_TIME 0x07
-#define MSG_ENTER_SETTING 0x08
-#define MSG_ENTER_MAIN 0x09
-#define MSG_BLYNK_LED 0x10
+#define MSG_CHANGE_AP_MODE 0x06
+#define MSG_CHANGE_STA_MODE 0x07
+#define MSG_SET_TIME 0x08
+#define MSG_ENTER_SETTING 0x09
+#define MSG_ENTER_MAIN 0x0A
+#define MSG_BLYNK_LED 0x0B
 #define MSG_RESET_ESP 0xFF
 
 int gMsgEventID = MSG_NOTHING;
@@ -177,9 +178,13 @@ void onBody(AsyncWebServerRequest *request, uint8_t *data, size_t len, size_t in
     {
         SendMessage(MSG_SET_TIME);
     }
-    else
+    else if (mode == "STA_MODE")
     {
-        SendMessage(MSG_CHANGE_MODE);
+        SendMessage(MSG_CHANGE_STA_MODE);
+    }
+    else if (mode == "AP_MODE")
+    {
+        SendMessage(MSG_CHANGE_AP_MODE);
     }
 }
 
@@ -207,8 +212,11 @@ void initPort()
 {
     Serial.println("Initializing Ports...");
 
-    pinMode(SERVO_NUM, INPUT_PULLUP);
+    pinMode(SERVO_NUM, OUTPUT);
     pinMode(RELAY_NUM, INPUT_PULLUP);
+
+    myservo.attach(SERVO_NUM);
+    myservo.write(90);
 
     //init open IO for anti-noise
     //pinMode(4, OUTPUT_OPEN_DRAIN);
@@ -249,7 +257,7 @@ void initEEPROM()
     {
         Serial.println("doc is null");
 
-        const char *json = "{\"MODE\":\"STA_MODE\",\"SPERK_TIME\":50,\"RELEASE_TIME\":10}";
+        const char *json = "{\"MODE\":\"AP_MODE\",\"SPERK_TIME\":50,\"RELEASE_TIME\":10}";
         deserializeJson(doc, json);
     }
 }
@@ -279,31 +287,21 @@ void initWiFi()
     Serial.printf("MODE = %s\n", mode.c_str());
 
     if (mode == "STA_MODE")
-    {
-        wifiManager.setTryConnectDuringConfigPortal(false);
-        if (!wifiManager.startConfigPortal(AP_NAME))
+    {        
+        if (!wifiManager.autoConnect(AP_NAME))
         {
-            wifiManager.autoConnect(AP_NAME);
+            doc["MODE"] = "AP_MODE";
+            serializeJson(doc, settings);
+            settings.flush(); //write to eeprom
+            ESP.restart();
         }
     }
-    else if (mode == "AP_MODE")
+    else
     {
         wifiManager.setConfigPortalTimeout(1);
         wifiManager.setTryConnectDuringConfigPortal(false);
         wifiManager.startConfigPortal(AP_NAME);
     }
-    else
-    {
-        if (!wifiManager.startConfigPortal(AP_NAME))
-        {
-            wifiManager.autoConnect(AP_NAME);
-        }
-    }
-
-    //SUBMIT
-    doc["MODE"] = "SUBMIT";
-    serializeJson(doc, settings);
-    settings.flush(); //write to eeprom
 
     Serial.println("WiFi Started");
 }
@@ -334,10 +332,12 @@ void initServer()
         SendMessage(MSG_ENTER_MAIN);
     });
 
-    server.on("/", HTTP_POST, [](AsyncWebServerRequest *request) {
-        Serial.println("[HTTP_POST] /");
-        request->send(200);
-    }, NULL, onBody);
+    server.on(
+        "/", HTTP_POST, [](AsyncWebServerRequest *request) {
+            Serial.println("[HTTP_POST] /");
+            request->send(200);
+        },
+        NULL, onBody);
 
     // Route for /settings web page
     server.on("/settings", HTTP_GET, [](AsyncWebServerRequest *request) {
@@ -465,7 +465,8 @@ void loop()
         mode.attach_ms(1000, blynkModeLed, 0);
         SendMessage(MSG_NOTHING);
         break;
-    case MSG_CHANGE_MODE:
+    case MSG_CHANGE_AP_MODE:
+    case MSG_CHANGE_STA_MODE:
     {
         Serial.print("Change Mode to ");
         Serial.println((const char *)doc["MODE"]);
@@ -520,16 +521,12 @@ void loop()
         int release_time = doc["RELEASE_TIME"];
         Serial.printf("RELEASE_TIME = %d[ms]\n", release_time);
 
-        myservo.attach(SERVO_NUM);
-        myservo.write(90);
-
         delay(release_time); // wait from MSG_IGNAITER_ON
 
-        Serial.println("Servo ON!");
+        //Serial.println("Servo ON!");
         myservo.write(150);
         delay(1000);
-        myservo.detach();
-        pinMode(SERVO_NUM, INPUT_PULLUP);
+        myservo.write(90);
 
         SendMessage(MSG_RESET_TIMER);
     }
@@ -564,13 +561,9 @@ void loop()
         SendMessage(MSG_NOTHING);
         break;
     case MSG_RESET_ESP:
-        delay(5000);
-#if defined(ESP8266)
-        ESP.reset();
-#else
+        delay(1000);
         ESP.restart();
-#endif
-        delay(2000);
+        break;
     default:
         //MSG_NOTHING
         break;
