@@ -1,27 +1,23 @@
-# Mission Controller
+# Rocket Launcher
 
-# 概要
+## ✅ Requirements
+- esp32
 
-## 説明
+Install esp32 libraries:
 
-## デモ
-
-## 要件
-
-## インストール
-
-```
+## 🚀 Usage
+```bash
 $ git clone https://github.com/riraosan/MissionControlCenter.git
 ```
+## 🤝 Contributing
+Contributions, issues and feature requests are welcome.
 
-## 使用方法
+## 👤 Author
+- Github: [riraosan](https://github.com/riraosan)
 
-## ビルド方法
+## ⭐️ Show your support
+Please STAR this repository if this software helped you!
 
-## ライセンス
+## 📝 License
+This software is released under the [MIT](https://github.com/riraosan/MissionControlCenter/blob/master/LICENSE) License.
 
-[MIT](https://github.com/riraosan/MissionControlCenter/blob/master/LICENSE)
-
-## 著者
-
-[rirao](https://github.com/riraosan)
