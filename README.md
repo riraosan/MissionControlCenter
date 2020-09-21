@@ -1,6 +1,6 @@
 # Rocket Launcher
 
-Rocket Laucherは、コロナ放電点火器（イグナイター）とサーボモーターを制御して、プロパンガスペットボトルロケットを遠隔から打ち上げるための、ESP32アプリケーションです。
+Rocket Laucherは、コロナ放電点火器（イグナイター）とサーボモーターを制御して、プロパンガスペットボトルロケットを遠隔から打ち上げるための、ESP32プロジェクトです。
 
 ## ✅ 必要とするもの、要件
 
@@ -31,6 +31,10 @@ TBD
 - https://github.com/RoboticsBrno/ServoESP32.git
 - https://github.com/bblanchon/ArduinoJson.git    
 - https://github.com/bblanchon/ArduinoStreamUtils.git
+
+### 発射機構の例
+
+TBD（写真）
 
 ## 🚀 Usage
 ```bash
