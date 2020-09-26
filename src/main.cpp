@@ -286,8 +286,15 @@ void initWiFi()
     String mode = String((const char *)doc["MODE"]);
     Serial.printf("MODE = %s\n", mode.c_str());
 
-    if (mode == "STA_MODE")
-    {        
+    if (mode == "AP_MODE")
+    {   
+        wifiManager.setConfigPortalTimeout(1);
+        wifiManager.setTryConnectDuringConfigPortal(false);
+        wifiManager.startConfigPortal(AP_NAME);
+    }
+    else
+    {
+        wifiManager.setConfigPortalTimeout(120);     
         if (!wifiManager.autoConnect(AP_NAME))
         {
             doc["MODE"] = "AP_MODE";
@@ -295,12 +302,6 @@ void initWiFi()
             settings.flush(); //write to eeprom
             ESP.restart();
         }
-    }
-    else
-    {
-        wifiManager.setConfigPortalTimeout(1);
-        wifiManager.setTryConnectDuringConfigPortal(false);
-        wifiManager.startConfigPortal(AP_NAME);
     }
 
     Serial.println("WiFi Started");
